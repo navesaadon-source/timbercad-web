@@ -1,0 +1,65 @@
+@import "tailwindcss";
+@import "@fontsource/assistant/400.css";
+@import "@fontsource/assistant/600.css";
+@import "@fontsource/assistant/700.css";
+@import "@fontsource/secular-one/400.css";
+
+@theme {
+  --color-slate: #1f2b33;      /* machine body */
+  --color-slate-2: #2c3b45;
+  --color-sheet: #f6f7f5;      /* raw board */
+  --color-ply: #d9b98a;        /* plywood edge */
+  --color-ply-2: #efe0c6;
+  --color-cut: #e8611a;        /* spindle orange – used sparingly */
+  --color-cut-ink: #b8460a;    /* text-safe orange (AA on white) */
+  --color-steel: #5c6b75;
+  --color-line: #dce1e3;
+  --color-ok: #2f7d4f;
+  --color-warn: #b7791f;
+  --color-info: #2f5f9e;
+  --font-display: "Secular One", "Assistant", system-ui, sans-serif;
+  --font-sans: "Assistant", system-ui, "Segoe UI", Arial, sans-serif;
+}
+
+html { font-size: 17px; }
+body { @apply bg-sheet text-slate font-sans antialiased; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0; }
+:focus-visible { outline: 3px solid var(--color-info); outline-offset: 2px; border-radius: 4px; }
+.skip-link { position: absolute; right: 12px; top: -60px; background: var(--color-slate); color: #fff; padding: 10px 16px; border-radius: 8px; z-index: 100; }
+.skip-link:focus { top: 12px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* form controls */
+@utility field { display:block; width:100%; border-radius: .5rem; border:1px solid var(--color-line); background:#fff; padding:.6rem .75rem; font-size:1rem; color: var(--color-slate);
+  &:focus { border-color: var(--color-info); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info) 25%, transparent); }
+  &:disabled { background: var(--color-sheet); } }
+@utility btn { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; border-radius:.5rem; padding:.6rem 1rem; font-weight:600; transition: background-color .15s, border-color .15s;
+  &:disabled { opacity:.5; cursor:not-allowed; } }
+@utility btn-primary { @apply btn; background: var(--color-slate); color:#fff; &:hover:not(:disabled) { background: var(--color-slate-2); } }
+@utility btn-cut { @apply btn; background: var(--color-cut-ink); color:#fff; &:hover:not(:disabled) { background: #9c3a07; } }
+@utility btn-ghost { @apply btn; border:1px solid var(--color-line); background:#fff; color: var(--color-slate); &:hover:not(:disabled) { background: var(--color-sheet); } }
+@utility btn-danger { @apply btn; border:1px solid #fecaca; background:#fff; color:#b91c1c; &:hover:not(:disabled) { background:#fef2f2; } }
+@utility panel { border-radius:.75rem; border:1px solid var(--color-line); background:#fff; }
+@utility label { display:block; margin-bottom:.375rem; font-size:.875rem; font-weight:600; color: var(--color-steel); }
+
+/* ─── accessibility modes (toggled on <html> by the accessibility menu) ─── */
+html.a11y-text-1 { font-size: 19px; }
+html.a11y-text-2 { font-size: 21px; }
+html.a11y-text-3 { font-size: 24px; }
+html.a11y-contrast { --color-sheet: #ffffff; --color-steel: #1f2b33; --color-line: #1f2b33; --color-cut-ink: #8a3300; --color-cut: #8a3300; }
+html.a11y-contrast body { background: #fff; }
+html.a11y-links a { text-decoration: underline !important; text-underline-offset: 3px; }
+html.a11y-readable * { font-family: Arial, Helvetica, sans-serif !important; letter-spacing: .01em; }
+html.a11y-spacing p, html.a11y-spacing li { line-height: 2 !important; word-spacing: .12em; }
+html.a11y-grayscale body > #root { filter: grayscale(1); }
+html.a11y-cursor, html.a11y-cursor * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24'%3E%3Cpath d='M4 2l16 10-7 1 4 8-3 1-4-8-6 5z' fill='black' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E") 4 2, auto !important; }
+html.a11y-no-motion *, html.a11y-no-motion *::before, html.a11y-no-motion *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* hero sheet: one orchestrated cut sequence on load */
+@keyframes cut { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+@keyframes fillin { from { fill-opacity: 0; } to { fill-opacity: 1; } }
+.cut-path { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: cut .55s ease-out forwards; animation-delay: var(--d); }
+.cut-fill { fill-opacity: 0; animation: fillin .4s ease-out forwards; animation-delay: calc(var(--d) + .45s); }
