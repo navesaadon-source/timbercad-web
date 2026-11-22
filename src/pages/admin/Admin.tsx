@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
-import { Download, Search, Plus, Eye, EyeOff } from "lucide-react";
+import { Download, Search, Plus, Eye, EyeOff, Pencil, Trash2, Check, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { AppShell, Empty, StatusBadge, fmtDate } from "@/components/ui";
 import { HardwareForm, useSpecText } from "@/components/SpecForms";
@@ -21,11 +21,37 @@ const TABS: { key: string; label: string; match: (s: OrderStatus) => boolean }[]
   { key: "all", label: "הכל", match: () => true },
 ];
 
+function BulkStatusBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => void; onClear: () => void }) {
+  const [to, setTo] = useState<OrderStatus>("billing");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const apply = async (status: OrderStatus) => {
+    setBusy(true); setMsg("");
+    try { for (const id of ids) await api.updateOrder(id, { status }); setMsg(`${ids.length} הזמנות עודכנו ל"${STATUS[status].label}"`); onClear(); onDone(); }
+    catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <div className={`sticky top-0 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-xl border p-3 ${ids.length ? "border-slate bg-white shadow-md" : "border-line bg-white/70"}`}>
+      <span className="font-semibold">{ids.length ? `נבחרו ${ids.length} הזמנות` : "סמן הזמנות כדי לשנות סטטוס לכמה יחד"}</span>
+      <span className="flex-1" />
+      <button className="btn-ghost py-1.5" disabled={!ids.length || busy} onClick={() => apply("done")}>סימון כהושלמו</button>
+      <button className="btn-primary py-1.5" disabled={!ids.length || busy} onClick={() => apply("billing")}>העברה לחיוב</button>
+      <select className="field w-36 py-1.5" value={to} onChange={(e) => setTo(e.target.value as OrderStatus)} aria-label="סטטוס לעדכון" disabled={!ids.length}>
+        {ADMIN_STATUSES.map((st) => <option key={st} value={st}>{STATUS[st].label}</option>)}
+      </select>
+      <button className="btn-ghost py-1.5" disabled={!ids.length || busy} onClick={() => apply(to)}>עדכון</button>
+      {ids.length > 0 && <button className="btn-ghost py-1.5" onClick={onClear}>ניקוי בחירה</button>}
+      {msg && <span role="status" className="w-full text-sm text-ok">{msg}</span>}
+    </div>
+  );
+}
+
 export function AdminOrders() {
   const { data: orders, reload, error } = useAsync(() => api.orders({ all: true }), []);
   const [tab, setTab] = useState("open");
   const [q, setQ] = useState("");
   const [client, setClient] = useState("");
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const { hw, mat } = useSpecText();
   const clients = useMemo(() => {
     const m = new Map<string, string>();
@@ -90,15 +116,20 @@ export function AdminOrders() {
         </select>
       </div>
       {error && <p role="alert" className="text-red-700">{error}</p>}
+      <BulkStatusBar ids={[...sel].filter((id) => list.some((o) => o.id === id))} onDone={reload} onClear={() => setSel(new Set())} />
       {orders && list.length === 0 ? <Empty title="אין הזמנות בתצוגה הזו">נסה לשנות את הסינון.</Empty> : (
         <div className="panel overflow-x-auto">
           <table className="w-full min-w-[820px] text-right">
             <thead className="border-b border-line bg-sheet text-sm text-steel">
-              <tr><th className="p-3">#</th><th className="p-3">פרויקט</th><th className="p-3">לקוח</th><th className="p-3">נפתחה</th><th className="p-3">לוחות</th><th className="p-3">סטטוס</th><th className="p-3">שינוי סטטוס</th></tr>
+              <tr><th className="w-10 p-3"><input type="checkbox" className="h-4 w-4 accent-slate" aria-label="בחירת כל ההזמנות בתצוגה"
+                checked={list.length > 0 && list.every((o) => sel.has(o.id))}
+                onChange={(e) => setSel(e.target.checked ? new Set(list.map((o) => o.id)) : new Set())} /></th><th className="p-3">#</th><th className="p-3">פרויקט</th><th className="p-3">לקוח</th><th className="p-3">נפתחה</th><th className="p-3">לוחות</th><th className="p-3">סטטוס</th><th className="p-3">שינוי סטטוס</th></tr>
             </thead>
             <tbody>
               {list.map((o) => (
-                <tr key={o.id} className={`border-b border-line last:border-0 hover:bg-sheet/60 ${o.status === "frozen" ? "bg-warn/5" : ""}`}>
+                <tr key={o.id} className={`border-b border-line last:border-0 hover:bg-sheet/60 ${sel.has(o.id) ? "bg-info/8" : o.status === "frozen" ? "bg-warn/5" : ""}`}>
+                  <td className="p-3"><input type="checkbox" className="h-4 w-4 accent-slate" checked={sel.has(o.id)} aria-label={`בחירת הזמנה ${o.order_no}`}
+                    onChange={() => setSel((s0) => { const s1 = new Set(s0); s1.has(o.id) ? s1.delete(o.id) : s1.add(o.id); return s1; })} /></td>
                   <td className="num p-3 text-steel">{o.order_no}</td>
                   <td className="p-3"><Link to={`/admin/order/${o.id}`} className="font-semibold text-slate underline-offset-2 hover:underline">{o.project_name}</Link>
                     {o.job_name && o.job_name !== o.project_name && <div className="text-sm text-steel" dir="auto">{o.job_name}</div>}</td>
@@ -175,7 +206,8 @@ export function AdminClients() {
 export function AdminClient() {
   const { id = "" } = useParams();
   const { data: clients, reload } = useAsync(() => api.clients(), [id]);
-  const { data: orders } = useAsync(() => api.orders({ all: true }), [id]);
+  const { data: orders, reload: reloadOrders } = useAsync(() => api.orders({ all: true }), [id]);
+  const [osel, setOsel] = useState<Set<string>>(new Set());
   const c = clients?.find((x) => x.id === id);
   const [f, setF] = useState<Profile | null>(null);
   const [msg, setMsg] = useState("");
@@ -191,7 +223,7 @@ export function AdminClient() {
     <AppShell admin title={cur.company_name || cur.full_name}>
       <p className="mb-2 text-sm"><Link to="/admin/clients" className="text-info underline">כל הלקוחות</Link></p>
       <h1 className="mb-6 text-3xl">{cur.company_name || cur.full_name}</h1>
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_26rem]">
         <div className="grid content-start gap-6">
           <section className="panel grid gap-4 p-5 sm:grid-cols-2">
             {([["full_name", "שם איש קשר"], ["company_name", "שם העסק"], ["phone", "טלפון"], ["drive_folder", "תיקיית לקוח בדרייב"]] as const).map(([k, l]) => (
@@ -205,11 +237,21 @@ export function AdminClient() {
           <section className="panel p-5"><h2 className="mb-4 text-2xl">הסטנדרט של הלקוח</h2><HardwareForm value={cur.defaults ?? { hinge: {}, drawer: {} }} onChange={(defaults) => set({ defaults })} /></section>
           <div className="flex items-center gap-3"><button className="btn-cut px-8" onClick={save}>שמירה</button>{msg && <span role="status">{msg}</span>}</div>
         </div>
-        <aside className="panel content-start p-5">
-          <h2 className="mb-3 text-xl">הזמנות ({mine.length})</h2>
-          <ul className="grid gap-2">{mine.map((o) => (
-            <li key={o.id}><Link to={`/admin/order/${o.id}`} className="flex items-center gap-2 rounded-lg p-2 hover:bg-sheet">
-              <span className="num text-steel">#{o.order_no}</span><span className="flex-1">{o.project_name}</span><StatusBadge status={o.status} admin /></Link></li>))}</ul>
+        <aside className="content-start">
+          <BulkStatusBar ids={[...osel]} onDone={reloadOrders} onClear={() => setOsel(new Set())} />
+          <div className="panel p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <input type="checkbox" className="h-4 w-4 accent-slate" aria-label="בחירת כל ההזמנות של הלקוח"
+                checked={mine.length > 0 && mine.every((o) => osel.has(o.id))} onChange={(e) => setOsel(e.target.checked ? new Set(mine.map((o) => o.id)) : new Set())} />
+              <h2 className="text-xl">הזמנות ({mine.length})</h2>
+            </div>
+            <ul className="grid gap-1">{mine.map((o) => (
+              <li key={o.id} className={`flex items-center gap-2 rounded-lg px-2 ${osel.has(o.id) ? "bg-info/8" : ""}`}>
+                <input type="checkbox" className="h-4 w-4 accent-slate" checked={osel.has(o.id)} aria-label={`בחירת הזמנה ${o.order_no}`}
+                  onChange={() => setOsel((s0) => { const s1 = new Set(s0); s1.has(o.id) ? s1.delete(o.id) : s1.add(o.id); return s1; })} />
+                <Link to={`/admin/order/${o.id}`} className="flex flex-1 items-center gap-2 rounded-lg py-2 hover:underline">
+                  <span className="num text-steel">#{o.order_no}</span><span className="flex-1">{o.project_name}</span><StatusBadge status={o.status} admin /></Link></li>))}</ul>
+          </div>
         </aside>
       </div>
     </AppShell>
@@ -219,31 +261,93 @@ export function AdminClient() {
 export function AdminCatalog() {
   const { catalog, reloadCatalog } = useApp();
   const [add, setAdd] = useState<Record<string, string>>({});
-  const save = async (p: Parameters<typeof api.saveCatalogItem>[0]) => { await api.saveCatalogItem(p); await reloadCatalog(); };
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<{ id: string; label: string } | null>(null);
+  const [confirmDel, setConfirmDel] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const run = async (fn: () => Promise<void>, done?: string) => {
+    setBusy(true); setMsg("");
+    try { await fn(); await reloadCatalog(); if (done) setMsg(done); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+  };
+  const toggle = (id: string) => setSel((s0) => { const s1 = new Set(s0); s1.has(id) ? s1.delete(id) : s1.add(id); return s1; });
+  const selected = catalog.filter((c) => sel.has(c.id));
+  const setActive = (items: typeof catalog, active: boolean) =>
+    run(() => api.saveCatalogItems(items.map((c) => ({ ...c, active }))), active ? "האפשרויות מוצגות" : "האפשרויות הוסתרו");
+  const saveLabel = () => {
+    if (!editing) return;
+    const item = catalog.find((c) => c.id === editing.id); const label = editing.label.trim();
+    setEditing(null);
+    if (item && label && label !== item.label) run(() => api.saveCatalogItem({ ...item, label }), "השם עודכן");
+  };
+  const cats = Object.entries(CATEGORIES).filter(([k]) => k !== "drawer_model");
   return (
     <AppShell admin title="קטלוג">
       <h1 className="text-3xl">קטלוג אפשרויות</h1>
-      <p className="mb-6 mt-1 max-w-2xl text-steel">האפשרויות שהלקוחות רואים בהזמנה. אפשרות מוסתרת לא תופיע בהזמנות חדשות, אבל נשמרת בהזמנות ישנות.</p>
+      <p className="mb-4 mt-1 max-w-2xl text-steel">האפשרויות שהלקוחות רואים בהזמנה. אפשרות מוסתרת לא מופיעה בהזמנות חדשות, אבל נשמרת בהזמנות ישנות.</p>
+
+      <div className={`sticky top-0 z-30 mb-5 flex flex-wrap items-center gap-2 rounded-xl border p-3 ${sel.size ? "border-slate bg-white shadow-md" : "border-line bg-white/70"}`}>
+        <span className="font-semibold">{sel.size ? `נבחרו ${sel.size}` : "סמן אפשרויות כדי לפעול על כמה יחד"}</span>
+        <span className="flex-1" />
+        <button className="btn-ghost py-1.5" disabled={!sel.size || busy} onClick={() => setActive(selected, false)}><EyeOff className="h-4 w-4" aria-hidden />הסתרה</button>
+        <button className="btn-ghost py-1.5" disabled={!sel.size || busy} onClick={() => setActive(selected, true)}><Eye className="h-4 w-4" aria-hidden />הצגה</button>
+        <button className="btn-danger py-1.5" disabled={!sel.size || busy} onClick={() => setConfirmDel([...sel])}><Trash2 className="h-4 w-4" aria-hidden />מחיקה</button>
+        {sel.size > 0 && <button className="btn-ghost py-1.5" onClick={() => setSel(new Set())}>ניקוי בחירה</button>}
+        {msg && <span role="status" className="w-full text-sm text-ok">{msg}</span>}
+      </div>
+
+      {confirmDel && (
+        <div role="alertdialog" aria-label="אישור מחיקה" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4">
+          <p className="font-semibold">למחוק {confirmDel.length === 1 ? `את "${catalog.find((c) => c.id === confirmDel[0])?.label}"` : `${confirmDel.length} אפשרויות`}?</p>
+          <p className="mt-1 text-sm text-steel">הזמנות ישנות שבחרו אפשרות שנמחקה יציגו את המזהה הפנימי שלה במקום השם. אם רוצים רק שלא תופיע ללקוחות, עדיף להסתיר.</p>
+          <div className="mt-3 flex gap-2">
+            <button className="btn-danger" autoFocus disabled={busy} onClick={() => run(async () => { await api.deleteCatalogItems(confirmDel); setSel(new Set()); setConfirmDel(null); }, "נמחק")}>מחיקה</button>
+            <button className="btn-ghost" onClick={() => setConfirmDel(null)}>ביטול</button>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {Object.entries(CATEGORIES).filter(([k]) => k !== "drawer_model").map(([cat, title]) => (
-          <section key={cat} className="panel p-4">
-            <h2 className="mb-3 text-xl">{title}</h2>
-            <ul className="grid gap-1">
-              {catalog.filter((c) => c.category === cat).sort((a, b) => a.sort - b.sort).map((c) => (
-                <li key={c.id} className={`flex items-center gap-2 rounded-md px-2 py-1 ${c.active ? "" : "text-steel line-through"}`}>
-                  <span className="flex-1">{c.label}</span>
-                  <button className="rounded p-1 hover:bg-sheet" onClick={() => save({ ...c, active: !c.active })} aria-label={c.active ? `הסתרת ${c.label}` : `הצגת ${c.label}`}>
-                    {c.active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button>
-                </li>
-              ))}
-            </ul>
-            <form className="mt-3 flex gap-2" onSubmit={async (e) => { e.preventDefault(); const label = add[cat]?.trim(); if (!label) return;
-              await save({ category: cat, key: label.toLowerCase().replace(/\s+/g, "_"), label, parent: null, sort: 900, active: true }); setAdd({ ...add, [cat]: "" }); }}>
-              <input className="field py-1.5" placeholder="אפשרות חדשה" value={add[cat] ?? ""} onChange={(e) => setAdd({ ...add, [cat]: e.target.value })} aria-label={`הוספה ל${title}`} />
-              <button className="btn-ghost py-1.5">הוספה</button>
-            </form>
-          </section>
-        ))}
+        {cats.map(([cat, title]) => {
+          const items = catalog.filter((c) => c.category === cat).sort((a, b) => a.sort - b.sort);
+          const allSel = items.length > 0 && items.every((c) => sel.has(c.id));
+          return (
+            <section key={cat} className="panel p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <input type="checkbox" className="h-4 w-4 accent-slate" checked={allSel} aria-label={`בחירת כל האפשרויות ב${title}`}
+                  onChange={() => setSel((s0) => { const s1 = new Set(s0); items.forEach((c) => (allSel ? s1.delete(c.id) : s1.add(c.id))); return s1; })} />
+                <h2 className="text-xl">{title}</h2>
+              </div>
+              <ul className="grid gap-0.5">
+                {items.map((c) => (
+                  <li key={c.id} className={`flex items-center gap-2 rounded-md px-2 py-1 ${sel.has(c.id) ? "bg-info/8" : ""}`}>
+                    <input type="checkbox" className="h-4 w-4 accent-slate" checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`בחירת ${c.label}`} />
+                    {editing?.id === c.id ? (
+                      <form className="flex flex-1 gap-1" onSubmit={(e) => { e.preventDefault(); saveLabel(); }}>
+                        <input autoFocus className="field py-1" value={editing.label} aria-label="שם האפשרות"
+                          onChange={(e) => setEditing({ ...editing, label: e.target.value })} onKeyDown={(e) => e.key === "Escape" && setEditing(null)} />
+                        <button className="rounded p-1.5 hover:bg-sheet" aria-label="שמירת השם"><Check className="h-4 w-4 text-ok" /></button>
+                        <button type="button" className="rounded p-1.5 hover:bg-sheet" onClick={() => setEditing(null)} aria-label="ביטול עריכה"><X className="h-4 w-4" /></button>
+                      </form>
+                    ) : (<>
+                      <span className={`flex-1 ${c.active ? "" : "text-steel line-through"}`}>{c.label}</span>
+                      <button className="rounded p-1 hover:bg-sheet" onClick={() => setEditing({ id: c.id, label: c.label })} aria-label={`עריכת ${c.label}`} title="עריכה"><Pencil className="h-4 w-4" /></button>
+                      <button className="rounded p-1 hover:bg-sheet" onClick={() => run(() => api.saveCatalogItem({ ...c, active: !c.active }))}
+                        aria-label={c.active ? `הסתרת ${c.label}` : `הצגת ${c.label}`} title={c.active ? "הסתרה" : "הצגה"}>
+                        {c.active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button>
+                      <button className="rounded p-1 text-red-700 hover:bg-red-50" onClick={() => setConfirmDel([c.id])} aria-label={`מחיקת ${c.label}`} title="מחיקה"><Trash2 className="h-4 w-4" /></button>
+                    </>)}
+                  </li>
+                ))}
+              </ul>
+              <form className="mt-3 flex gap-2" onSubmit={async (e) => { e.preventDefault(); const label = add[cat]?.trim(); if (!label) return;
+                await run(() => api.saveCatalogItem({ category: cat, key: label.toLowerCase().replace(/\s+/g, "_"), label, parent: null, sort: 900, active: true })); setAdd({ ...add, [cat]: "" }); }}>
+                <input className="field py-1.5" placeholder="אפשרות חדשה" value={add[cat] ?? ""} onChange={(e) => setAdd({ ...add, [cat]: e.target.value })} aria-label={`הוספה ל${title}`} />
+                <button className="btn-ghost py-1.5">הוספה</button>
+              </form>
+            </section>
+          );
+        })}
       </div>
     </AppShell>
   );

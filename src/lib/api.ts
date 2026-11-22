@@ -22,6 +22,8 @@ export interface Api {
   clients(): Promise<Profile[]>;
   catalog(): Promise<CatalogItem[]>;
   saveCatalogItem(item: Partial<CatalogItem>): Promise<void>;
+  saveCatalogItems(items: Partial<CatalogItem>[]): Promise<void>;
+  deleteCatalogItems(ids: string[]): Promise<void>;
   orders(opts?: { all?: boolean }): Promise<Order[]>;
   order(id: string): Promise<Order | null>;
   createOrder(o: NewOrder): Promise<Order>;
@@ -62,6 +64,8 @@ function supabaseApi(sb: SupabaseClient): Api {
     async clients() { return ok(await sb.from("profiles").select("*").order("company_name")) as Profile[]; },
     async catalog() { return ok(await sb.from("catalog").select("*").order("category").order("sort")) as CatalogItem[]; },
     async saveCatalogItem(item) { ok(await sb.from("catalog").upsert(item)); },
+    async saveCatalogItems(items) { if (items.length) ok(await sb.from("catalog").upsert(items)); },
+    async deleteCatalogItems(ids) { if (ids.length) ok(await sb.from("catalog").delete().in("id", ids)); },
     async orders(opts) {
       let q = sb.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false });
       if (!opts?.all) { const s = await this.session(); if (s) q = q.eq("user_id", s.userId); }
@@ -166,6 +170,8 @@ function demoApi(): Api {
       else db.catalog.push({ id: uid(), category: "", key: "", label: "", parent: null, sort: 999, active: true, ...item } as CatalogItem);
       save();
     },
+    async saveCatalogItems(items) { for (const i of items) await this.saveCatalogItem(i); },
+    async deleteCatalogItems(ids) { db.catalog = db.catalog.filter((c) => !ids.includes(c.id)); save(); },
     async orders(opts) {
       const u = me(); if (!u) return [];
       const list = db.orders.filter((o) => (opts?.all && u.role === "admin") || o.user_id === u.id);
