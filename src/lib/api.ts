@@ -42,12 +42,15 @@ function supabaseApi(sb: SupabaseClient): Api {
     demo: false,
     async session() { const { data } = await sb.auth.getSession(); return data.session ? { userId: data.session.user.id } : null; },
     onAuthChange(cb) { const { data } = sb.auth.onAuthStateChange(() => cb()); return () => data.subscription.unsubscribe(); },
+    // Redirect back to the site root (no #hash – the router owns the hash); PKCE returns ?code=… which supabase-js exchanges.
     async signInGoogle() {
-      const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname + "#/portal" } });
+      markLogin();
+      const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
       if (error) throw error;
     },
     async signInEmail(email) {
-      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname + "#/portal" } });
+      markLogin();
+      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
       if (error) throw error;
     },
     async signOut() { await sb.auth.signOut(); },
@@ -208,4 +211,23 @@ function demoApi(): Api {
   };
 }
 
-export const api: Api = DEMO ? demoApi() : supabaseApi(createClient(URL_!, KEY_!));
+const LOGIN_FLAG = "tc-login-pending";
+function markLogin() { try { localStorage.setItem(LOGIN_FLAG, String(Date.now())); } catch { /* ignore */ } }
+
+function makeSupabase() {
+  const sb = createClient(URL_!, KEY_!, { auth: { flowType: "pkce", detectSessionInUrl: true, persistSession: true } });
+  // after returning from Google / the e-mail link: go to the personal area
+  sb.auth.onAuthStateChange((event) => {
+    if (event !== "SIGNED_IN") return;
+    let pending = false;
+    try { pending = !!localStorage.getItem(LOGIN_FLAG); localStorage.removeItem(LOGIN_FLAG); } catch { /* ignore */ }
+    const onPublic = !location.hash || location.hash === "#/" || location.hash.startsWith("#/login");
+    if (pending || (onPublic && location.search.includes("code="))) {
+      if (location.search) history.replaceState(null, "", location.pathname + "#/portal");
+      else location.hash = "#/portal";
+    }
+  });
+  return sb;
+}
+
+export const api: Api = DEMO ? demoApi() : supabaseApi(makeSupabase());

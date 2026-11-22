@@ -13,6 +13,12 @@ export const hasDefaults = (h?: HardwareSpec) => !!(h && (h.connection_method ||
 
 export function MyOrders() {
   const { me } = useApp();
+  const nav = useNavigate();
+  useEffect(() => {
+    let first = false;
+    try { first = !sessionStorage.getItem("tc-admin-landed"); sessionStorage.setItem("tc-admin-landed", "1"); } catch { /* ignore */ }
+    if (me?.role === "admin" && first) nav("/admin", { replace: true });
+  }, [me, nav]);
   const { data: orders, error } = useAsync(() => api.orders(), [me?.id]);
   const active = orders?.filter((o) => !["billed", "cancelled"].includes(o.status)) ?? [];
   const past = orders?.filter((o) => ["billed", "cancelled"].includes(o.status)) ?? [];
