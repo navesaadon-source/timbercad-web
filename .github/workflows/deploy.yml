@@ -1,6 +1,5 @@
 # Builds the site and publishes it to GitHub Pages on every push to main.
 # Repo → Settings → Pages → Source: GitHub Actions
-# Repo → Settings → Secrets and variables → Actions → add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
 name: Deploy
 on:
   push: { branches: [main] }
@@ -15,10 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: npm run build
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      - run: npm run build   # Supabase URL + publishable key come from .env.production
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
   deploy:
