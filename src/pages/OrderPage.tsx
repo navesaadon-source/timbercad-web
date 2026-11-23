@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pause, Play, Pencil, ExternalLink, FileText, Trash2, LayoutGrid } from "lucide-react";
 import { AppShell, StatusBadge, StatusLine, fmtDate, fmtDateTime } from "@/components/ui";
 import { SpecSummary } from "@/components/SpecForms";
@@ -149,20 +149,36 @@ function Confirm({ children, onYes, onNo, yes, busy, danger }: { children: React
 
 function HubCard({ order }: { order: Order }) {
   const [busy, setBusy] = useState(false);
+  const [html, setHtml] = useState<string | null>(null);
+  const [err, setErr] = useState("");
   const open = async () => {
-    setBusy(true);
-    const w = window.open("", "_blank");
-    try {
-      const html = await api.hubHtml(order.hub_path!);
-      const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-      if (w) w.location.href = url; else location.href = url;
-    } catch (e) { w?.close(); alert((e as Error).message); } finally { setBusy(false); }
+    setBusy(true); setErr("");
+    try { setHtml(await api.hubHtml(order.hub_path!)); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
+  const newTab = () => { if (!html) return; const url = URL.createObjectURL(new Blob([html], { type: "text/html" })); window.open(url, "_blank", "noopener"); };
+  useEffect(() => {
+    if (!html) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setHtml(null);
+    document.body.style.overflow = "hidden"; addEventListener("keydown", esc);
+    return () => { document.body.style.overflow = ""; removeEventListener("keydown", esc); };
+  }, [html]);
   return (
     <section className="flex flex-wrap items-center gap-4 rounded-xl bg-slate p-5 text-white">
       <LayoutGrid className="h-9 w-9 text-ply" aria-hidden />
       <div className="flex-1"><h2 className="text-2xl">מרכז העבודה</h2><p className="text-white/75">פריסת פלטות ומדבקות, דוחות בנייה, פרזול, תוכניות וקבצי מכונה.</p></div>
-      <button className="btn-cut" onClick={open} disabled={busy}><ExternalLink className="h-4 w-4" aria-hidden />{busy ? "פותח…" : "פתיחת מרכז העבודה"}</button>
+      <button className="btn-cut" onClick={open} disabled={busy}><ExternalLink className="h-4 w-4" aria-hidden />{busy ? "טוען…" : "פתיחת מרכז העבודה"}</button>
+      {err && <p role="alert" className="w-full text-sm text-red-200">{err}</p>}
+      {html && (
+        <div role="dialog" aria-label={`מרכז העבודה – ${order.project_name}`} className="fixed inset-0 z-[60] flex flex-col bg-slate">
+          <div className="flex items-center gap-3 px-4 py-2 text-white">
+            <span className="flex-1 font-semibold">מרכז העבודה: {order.project_name}</span>
+            <button className="btn-ghost py-1.5 text-sm" onClick={newTab}><ExternalLink className="h-4 w-4" aria-hidden />בחלון נפרד</button>
+            <button className="btn-primary border border-white/30 py-1.5 text-sm" onClick={() => setHtml(null)} autoFocus>סגירה</button>
+          </div>
+          <iframe title="מרכז העבודה" srcDoc={html} className="w-full flex-1 border-0 bg-white"
+            sandbox="allow-scripts allow-same-origin allow-modals allow-downloads allow-popups" />
+        </div>
+      )}
     </section>
   );
 }

@@ -96,7 +96,7 @@ function supabaseApi(sb: SupabaseClient): Api {
 
 // ───────────────────────── Demo (browser only) ─────────────────────────
 function demoApi(): Api {
-  const KEY = "tc-demo-v1";
+  const KEY = "tc-demo-v2";
   type DB = { user: string | null; profiles: Profile[]; orders: Order[]; events: OrderEvent[]; catalog: CatalogItem[]; files: Record<string, string> };
   const uid = () => crypto.randomUUID();
   const now = () => new Date().toISOString();
@@ -122,13 +122,22 @@ function demoApi(): Api {
     });
     const orders = [
       mk(1, c1, "מטבח משפחת כהן", "billed", 60, 18),
-      mk(2, c1, "ארון הורים", "done", 20, 7),
-      mk(3, c1, "app buliding", "production", 6, 8),
+      mk(2, c1, "ארון הורים", "production", 4, null),
+      mk(3, c1, "app buliding", "done", 6, 8),
       mk(4, c2, "ספריה סלון", "submitted", 1, null),
       mk(5, c2, "חדר כביסה", "frozen", 9, null),
     ];
     orders[4].frozen_at = ago(2);
-    const events: OrderEvent[] = orders.map((o) => ({ id: uid(), order_id: o.id, actor_id: o.user_id, kind: "created", from_status: null, to_status: "submitted", note: null, created_at: o.created_at }));
+    const PATH: OrderStatus[] = ["submitted", "production", "done", "billing", "billed"];
+    const events: OrderEvent[] = orders.flatMap((o) => {
+      const t0 = new Date(o.created_at).getTime();
+      const ev: OrderEvent[] = [{ id: uid(), order_id: o.id, actor_id: o.user_id, kind: "created", from_status: null, to_status: "submitted", note: null, created_at: o.created_at }];
+      const target = o.status === "frozen" ? "production" : o.status;
+      for (let i = 1; i <= PATH.indexOf(target); i++)
+        ev.push({ id: uid(), order_id: o.id, actor_id: "admin", kind: "status", from_status: PATH[i - 1], to_status: PATH[i], note: null, created_at: new Date(t0 + i * 864e5).toISOString() });
+      if (o.status === "frozen") ev.push({ id: uid(), order_id: o.id, actor_id: o.user_id, kind: "frozen", from_status: "production", to_status: "frozen", note: null, created_at: o.frozen_at! });
+      return ev;
+    });
     const catalog: CatalogItem[] = SEED.map(([category, key, label, parent], i) => ({ id: uid(), category, key, label, parent: parent ?? null, sort: i, active: true }));
     return { user: null, profiles: [admin, c1, c2], orders, events, catalog, files: {} };
   }
@@ -211,8 +220,14 @@ function demoApi(): Api {
     },
     async fileUrl() { return "#"; },
     async hubHtml() {
+      // demo build: a real job hub is bundled from src/demo/hub-demo.html (kept out of git – it holds client data)
+      if (import.meta.env.MODE === "demo") {
+        const mods = import.meta.glob("/src/demo/hub-demo.html", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+        const html = Object.values(mods)[0];
+        if (html) return html;
+      }
       return `<!doctype html><html dir="rtl"><body style="font-family:Arial;padding:40px;color:#334"><h2>מרכז העבודה</h2>
-        <p>בגרסה המלאה כאן נפתח מרכז העבודה של ההזמנה: פריסת פלטות, מדבקות, דוחות בנייה, פרזול וקבצי מכונה.</p></body></html>`;
+        <p>כאן נפתח מרכז העבודה של ההזמנה: פריסת פלטות, מדבקות, דוחות בנייה, פרזול וקבצי מכונה.</p></body></html>`;
     },
   };
 }
