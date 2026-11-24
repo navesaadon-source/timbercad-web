@@ -41,6 +41,7 @@ export interface Api {
   hubHtml(path: string): Promise<string>;
   createClient(c: NewClient): Promise<{ id: string; created: boolean }>;
   setEmail(id: string, email: string): Promise<void>;
+  deleteClient(id: string): Promise<void>;
   importLegacy(clients: LegacyClient[], orders: LegacyOrder[]): Promise<ImportResult>;
   watcher(): Promise<WatcherInfo | null>;
 }
@@ -103,6 +104,7 @@ function supabaseApi(sb: SupabaseClient): Api {
     },
     async createClient(c) { return adminFn(sb, { action: "create_client", client: c }); },
     async setEmail(id, email) { await adminFn(sb, { action: "set_email", id, email }); },
+    async deleteClient(id) { await adminFn(sb, { action: "delete_client", id }); },
     async importLegacy(clients, orders) { return adminFn(sb, { action: "import", clients, orders }); },
     async watcher() {
       const r = ok(await sb.from("settings").select("value").eq("key", "watcher").maybeSingle()) as { value: string } | null;
@@ -254,6 +256,11 @@ function demoApi(): Api {
       const id = uid();
       db.profiles.push({ id, role: "client", defaults: blankHw(), notes: "", created_at: now(), ...c, email: c.email.toLowerCase() });
       save(); return { id, created: true };
+    },
+    async deleteClient(id) {
+      const gone = new Set(db.orders.filter((o) => o.user_id === id).map((o) => o.id));
+      db.profiles = db.profiles.filter((p) => p.id !== id); db.orders = db.orders.filter((o) => !gone.has(o.id));
+      db.events = db.events.filter((e) => !gone.has(e.order_id)); save();
     },
     async setEmail(id, email) { db.profiles = db.profiles.map((p) => (p.id === id ? { ...p, email: email.trim().toLowerCase() } : p)); save(); },
     async importLegacy(clients, orders) {

@@ -13,17 +13,45 @@ import { WatcherStatus } from "@/components/WatcherStatus";
 import { BUSINESS_DRIVE } from "@/config";
 import type { Order, OrderStatus, Profile } from "@/lib/types";
 
-const TABS: { key: string; label: string; match: (s: OrderStatus) => boolean }[] = [
-  { key: "open", label: "פתוחות", match: (s) => ["submitted", "production", "frozen"].includes(s) },
-  { key: "submitted", label: "חדשות", match: (s) => s === "submitted" },
-  { key: "production", label: "בייצור", match: (s) => s === "production" },
-  { key: "frozen", label: "מוקפאות", match: (s) => s === "frozen" },
-  { key: "billing", label: "לחיוב", match: (s) => s === "done" || s === "billing" },
-  { key: "billed", label: "ארכיון", match: (s) => s === "billed" || s === "cancelled" },
-  { key: "all", label: "הכל", match: () => true },
+const TABS: { key: string; label: string; hint: string; match: (s: OrderStatus) => boolean }[] = [
+  { key: "open", label: "פתוחות", hint: "חדשות, בייצור ומוקפאות", match: (s) => ["submitted", "production", "frozen"].includes(s) },
+  { key: "submitted", label: "חדשות", hint: "ממתינות לתחילת עבודה", match: (s) => s === "submitted" },
+  { key: "production", label: "בייצור", hint: "הלקוח כבר לא יכול לערוך", match: (s) => s === "production" },
+  { key: "frozen", label: "מוקפאות", hint: "הלקוח עצר את העבודה", match: (s) => s === "frozen" },
+  { key: "billing", label: "לחיוב", hint: "הושלמו ועוד לא חויבו", match: (s) => s === "done" || s === "billing" },
+  { key: "billed", label: "חויבו", hint: "ארכיון", match: (s) => s === "billed" },
+  { key: "cancelled", label: "בוטלו", hint: "ארכיון", match: (s) => s === "cancelled" },
+  { key: "all", label: "כל ההזמנות", hint: "בלי סינון", match: () => true },
 ];
 
-function BulkStatusBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => void; onClear: () => void }) {
+const daysAgo = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+
+function OrdersDashboard({ orders, tab, setTab }: { orders: Order[]; tab: string; setTab: (k: string) => void }) {
+  return (
+    <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4" role="tablist" aria-label="הזמנות לפי מצב">
+      {TABS.map((x) => {
+        const os = orders.filter((o) => x.match(o.status));
+        const clients = new Set(os.map((o) => o.user_id)).size;
+        const oldest = ["open", "submitted", "production", "frozen", "billing"].includes(x.key) && os.length
+          ? Math.max(...os.map((o) => daysAgo(o.created_at))) : null;
+        const on = tab === x.key;
+        const alert = x.key === "frozen" && os.length > 0;
+        return (
+          <button key={x.key} role="tab" aria-selected={on} onClick={() => setTab(x.key)}
+            className={`grid gap-0.5 rounded-xl border p-3.5 text-right transition-colors ${on ? "border-slate bg-slate text-white" : alert ? "border-warn/50 bg-warn/10 hover:bg-warn/15" : "border-line bg-white hover:border-slate/40"}`}>
+            <span className={`text-sm font-semibold ${on ? "text-white/85" : alert ? "text-warn" : "text-steel"}`}>{x.label}</span>
+            <span className="num text-3xl font-bold leading-tight">{os.length}</span>
+            <span className={`text-xs ${on ? "text-white/75" : "text-steel"}`}>
+              {os.length ? `מ-${clients} ${clients === 1 ? "לקוח" : "לקוחות"}` : x.hint}{oldest !== null && oldest > 0 ? ` · הוותיקה מלפני ${oldest === 1 ? "יום" : oldest === 2 ? "יומיים" : `${oldest} ימים`}` : ""}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function BulkStatusBar({ ids, onDone, onClear, manage }: { ids: string[]; onDone: () => void; onClear: () => void; manage?: { hiddenView: boolean } }) {
   const [to, setTo] = useState<OrderStatus>("billing");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -34,7 +62,7 @@ function BulkStatusBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => 
   };
   return (
     <div className={`sticky top-0 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-xl border p-3 ${ids.length ? "border-slate bg-white shadow-md" : "border-line bg-white/70"}`}>
-      <span className="font-semibold">{ids.length ? `נבחרו ${ids.length} הזמנות` : "סמן הזמנות כדי לשנות סטטוס לכמה יחד"}</span>
+      <span className="font-semibold">{ids.length ? `נבחרו ${ids.length} הזמנות` : "סמן הזמנות כדי לטפל בכמה יחד"}</span>
       <span className="flex-1" />
       <button className="btn-ghost py-1.5" disabled={!ids.length || busy} onClick={() => apply("done")}>סימון כהושלמו</button>
       <button className="btn-primary py-1.5" disabled={!ids.length || busy} onClick={() => apply("billing")}>העברה לחיוב</button>
@@ -42,6 +70,15 @@ function BulkStatusBar({ ids, onDone, onClear }: { ids: string[]; onDone: () => 
         {ADMIN_STATUSES.map((st) => <option key={st} value={st}>{STATUS[st].label}</option>)}
       </select>
       <button className="btn-ghost py-1.5" disabled={!ids.length || busy} onClick={() => apply(to)}>עדכון</button>
+      {manage && <>
+        <button className="btn-ghost py-1.5" disabled={!ids.length || busy} onClick={async () => {
+          setBusy(true); try { for (const id of ids) await api.updateOrder(id, { hidden: !manage.hiddenView }); setMsg(`${ids.length} הזמנות ${manage.hiddenView ? "הוחזרו לתצוגה" : "הוסתרו"}`); onClear(); onDone(); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+        }}>{manage.hiddenView ? <Eye className="h-4 w-4" aria-hidden /> : <EyeOff className="h-4 w-4" aria-hidden />}{manage.hiddenView ? "החזרה לתצוגה" : "הסתרה"}</button>
+        <button className="btn-ghost py-1.5 text-red-700" disabled={!ids.length || busy} onClick={async () => {
+          if (!confirm(`למחוק ${ids.length} הזמנות לצמיתות? ההיסטוריה שלהן תימחק גם היא. אי אפשר לבטל.`)) return;
+          setBusy(true); try { for (const id of ids) await api.deleteOrder(id); setMsg(`${ids.length} הזמנות נמחקו`); onClear(); onDone(); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+        }}><Trash2 className="h-4 w-4" aria-hidden />מחיקה</button>
+      </>}
       {ids.length > 0 && <button className="btn-ghost py-1.5" onClick={onClear}>ניקוי בחירה</button>}
       {msg && <span role="status" className="w-full text-sm text-ok">{msg}</span>}
     </div>
@@ -53,18 +90,26 @@ export function AdminOrders() {
   const [tab, setTab] = useState("open");
   const [q, setQ] = useState("");
   const [client, setClient] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const { hw, mat } = useSpecText();
+  const hiddenCount = (orders ?? []).filter((o) => o.hidden).length;
+  const visible = (orders ?? []).filter((o) => !!o.hidden === showHidden);
   const clients = useMemo(() => {
     const m = new Map<string, string>();
     orders?.forEach((o) => m.set(o.user_id, o.client?.company_name || o.client?.full_name || o.client?.email || ""));
     return [...m].sort((a, b) => a[1].localeCompare(b[1], "he"));
   }, [orders]);
   const t = TABS.find((x) => x.key === tab)!;
-  const list = (orders ?? []).filter((o) => t.match(o.status) && (!client || o.user_id === client) &&
+  const list = visible.filter((o) => t.match(o.status) && (!client || o.user_id === client) &&
     (!q || `${o.order_no} ${o.project_name} ${o.job_name} ${o.client?.company_name} ${o.client?.full_name}`.toLowerCase().includes(q.toLowerCase())));
 
   const quickStatus = async (o: Order, s: OrderStatus) => { await api.updateOrder(o.id, { status: s }); reload(); };
+  const toggleHidden = async (o: Order) => { await api.updateOrder(o.id, { hidden: !o.hidden }); reload(); };
+  const remove = async (o: Order) => {
+    if (!confirm(`למחוק את הזמנה ${o.order_no} "${o.project_name}" לצמיתות? אי אפשר לבטל.`)) return;
+    await api.deleteOrder(o.id); reload();
+  };
   const exportRows = () => list.map((o) => {
     const h = hw(o.hardware);
     return {
@@ -85,7 +130,7 @@ export function AdminOrders() {
     const blob = new Blob(["﻿" + XLSX.utils.sheet_to_csv(ws)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `timbercad-orders-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
   };
-  const count = (k: string) => (orders ?? []).filter((o) => TABS.find((x) => x.key === k)!.match(o.status)).length;
+  const count = (k: string) => visible.filter((o) => TABS.find((x) => x.key === k)!.match(o.status)).length;
 
   return (
     <AppShell admin title="ניהול הזמנות">
@@ -96,19 +141,7 @@ export function AdminOrders() {
         <Link to="/admin/new" className="btn-cut"><Plus className="h-4 w-4" aria-hidden />הזמנה ללקוח</Link>
       </div>
       <WatcherStatus />
-      {count("frozen") > 0 && tab !== "frozen" && (
-        <button onClick={() => setTab("frozen")} className="mb-4 w-full rounded-xl border border-warn/40 bg-warn/10 p-3 text-right font-semibold text-warn">
-          {count("frozen")} הזמנות הוקפאו על ידי לקוחות. לחץ לצפייה
-        </button>
-      )}
-      <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="סינון לפי מצב">
-        {TABS.map((x) => (
-          <button key={x.key} role="tab" aria-selected={tab === x.key} onClick={() => setTab(x.key)}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-semibold ${tab === x.key ? "border-slate bg-slate text-white" : "border-line bg-white"}`}>
-            {x.label} <span className="num opacity-70">{count(x.key)}</span>
-          </button>
-        ))}
-      </div>
+      {orders && <OrdersDashboard orders={visible} tab={tab} setTab={setTab} />}
       <div className="mb-4 flex flex-wrap gap-3">
         <div className="relative min-w-60 flex-1">
           <Search className="absolute right-3 top-3 h-5 w-5 text-steel" aria-hidden />
@@ -117,16 +150,21 @@ export function AdminOrders() {
         <select className="field w-60" value={client} onChange={(e) => setClient(e.target.value)} aria-label="סינון לפי לקוח">
           <option value="">כל הלקוחות</option>{clients.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
         </select>
+        {(hiddenCount > 0 || showHidden) && (
+          <button className={`btn-ghost ${showHidden ? "border-slate" : ""}`} aria-pressed={showHidden} onClick={() => { setShowHidden(!showHidden); setSel(new Set()); }}>
+            {showHidden ? <><Eye className="h-4 w-4" aria-hidden />חזרה להזמנות</> : <><EyeOff className="h-4 w-4" aria-hidden />מוסתרות ({hiddenCount})</>}
+          </button>)}
       </div>
+      {showHidden && <p className="mb-3 rounded-lg bg-sheet p-3 text-sm text-steel">מוצגות ההזמנות שהסתרת. הן לא נספרות בלוח ולא מופיעות ברשימות. הלקוח עדיין רואה אותן אצלו.</p>}
       {error && <p role="alert" className="text-red-700">{error}</p>}
-      <BulkStatusBar ids={[...sel].filter((id) => list.some((o) => o.id === id))} onDone={reload} onClear={() => setSel(new Set())} />
+      <BulkStatusBar ids={[...sel].filter((id) => list.some((o) => o.id === id))} onDone={reload} onClear={() => setSel(new Set())} manage={{ hiddenView: showHidden }} />
       {orders && list.length === 0 ? <Empty title="אין הזמנות בתצוגה הזו">נסה לשנות את הסינון.</Empty> : (
         <div className="panel overflow-x-auto">
-          <table className="w-full min-w-[820px] text-right">
+          <table className="w-full min-w-[900px] text-right">
             <thead className="border-b border-line bg-sheet text-sm text-steel">
               <tr><th className="w-10 p-3"><input type="checkbox" className="h-4 w-4 accent-slate" aria-label="בחירת כל ההזמנות בתצוגה"
                 checked={list.length > 0 && list.every((o) => sel.has(o.id))}
-                onChange={(e) => setSel(e.target.checked ? new Set(list.map((o) => o.id)) : new Set())} /></th><th className="p-3">#</th><th className="p-3">פרויקט</th><th className="p-3">לקוח</th><th className="p-3">נפתחה</th><th className="p-3">לוחות</th><th className="p-3">סטטוס</th><th className="p-3">שינוי סטטוס</th></tr>
+                onChange={(e) => setSel(e.target.checked ? new Set(list.map((o) => o.id)) : new Set())} /></th><th className="p-3">#</th><th className="p-3">פרויקט</th><th className="p-3">לקוח</th><th className="p-3">נפתחה</th><th className="p-3">לוחות</th><th className="p-3">סטטוס</th><th className="p-3">שינוי סטטוס</th><th className="p-3"><span className="sr-only">פעולות</span></th></tr>
             </thead>
             <tbody>
               {list.map((o) => (
@@ -144,6 +182,14 @@ export function AdminOrders() {
                     <select className="field py-1.5 text-sm" value={o.status} onChange={(e) => quickStatus(o, e.target.value as OrderStatus)} aria-label={`סטטוס הזמנה ${o.order_no}`}>
                       {ADMIN_STATUSES.map((s) => <option key={s} value={s}>{STATUS[s].label}</option>)}
                     </select>
+                  </td>
+                  <td className="p-2">
+                    <div className="flex gap-0.5">
+                      <Link to={`/admin/order/${o.id}`} className="rounded-lg p-2 text-steel hover:bg-sheet hover:text-slate" title="עריכה" aria-label={`עריכת הזמנה ${o.order_no}`}><Pencil className="h-4 w-4" /></Link>
+                      <button className="rounded-lg p-2 text-steel hover:bg-sheet hover:text-slate" title={o.hidden ? "החזרה לתצוגה" : "הסתרה"} aria-label={`${o.hidden ? "החזרת" : "הסתרת"} הזמנה ${o.order_no}`} onClick={() => toggleHidden(o)}>
+                        {o.hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button>
+                      <button className="rounded-lg p-2 text-steel hover:bg-red-50 hover:text-red-700" title="מחיקה" aria-label={`מחיקת הזמנה ${o.order_no}`} onClick={() => remove(o)}><Trash2 className="h-4 w-4" /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -202,8 +248,16 @@ function NewClientForm({ onClose }: { onClose: () => void }) {
   );
 }
 
+async function confirmDeleteClient(c: Profile, orderCount: number) {
+  const name = c.company_name || c.full_name || c.email;
+  if (!confirm(`למחוק את הלקוח "${name}"?\n${orderCount ? `יימחקו גם ${orderCount} ההזמנות שלו, ההיסטוריה ומרכזי העבודה באתר. ` : ""}התיקיות בדרייב לא נמחקות. אי אפשר לבטל.`)) return false;
+  await api.deleteClient(c.id);
+  return true;
+}
+
 export function AdminClients() {
-  const { data: clients } = useAsync(() => api.clients(), []);
+  const { data: clients, reload } = useAsync(() => api.clients(), []);
+  const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
   const { data: orders } = useAsync(() => api.orders({ all: true }), []);
   const [q, setQ] = useState("");
@@ -219,15 +273,21 @@ export function AdminClients() {
         <Link to="/admin/import" className="btn-ghost">ייבוא מהמערכת הקודמת</Link>
         <button className="btn-cut" onClick={() => setAdding(true)}><Plus className="h-4 w-4" aria-hidden />לקוח חדש</button></div>
       {adding && <NewClientForm onClose={() => setAdding(false)} />}
+      {err && <p role="alert" className="mb-3 text-red-700">{err}</p>}
       <div className="panel overflow-x-auto">
-        <table className="w-full min-w-[700px] text-right">
-          <thead className="border-b border-line bg-sheet text-sm text-steel"><tr><th className="p-3">עסק</th><th className="p-3">איש קשר</th><th className="p-3">מייל</th><th className="p-3">טלפון</th><th className="p-3">תיקייה בדרייב</th><th className="p-3">הזמנות פתוחות</th><th className="p-3">סה״כ</th></tr></thead>
+        <table className="w-full min-w-[760px] text-right">
+          <thead className="border-b border-line bg-sheet text-sm text-steel"><tr><th className="p-3">עסק</th><th className="p-3">איש קשר</th><th className="p-3">מייל</th><th className="p-3">טלפון</th><th className="p-3">תיקייה בדרייב</th><th className="p-3">הזמנות פתוחות</th><th className="p-3">סה״כ</th><th className="p-3"><span className="sr-only">פעולות</span></th></tr></thead>
           <tbody>{list.map((c) => { const s = stats(c.id); return (
             <tr key={c.id} className="border-b border-line last:border-0 hover:bg-sheet/60">
               <td className="p-3"><Link to={`/admin/clients/${c.id}`} className="font-semibold hover:underline">{c.company_name || "—"}</Link>{c.role === "admin" && <span className="mr-2 rounded bg-slate px-1.5 text-xs text-white">מנהל</span>}</td>
               <td className="p-3">{c.full_name}</td><td className="p-3" dir="ltr">{c.email}</td><td className="p-3" dir="ltr">{c.phone}</td>
               <td className="p-3">{c.drive_folder || <span className="text-steel">—</span>}</td>
               <td className="num p-3">{s.open}</td><td className="num p-3">{s.total}</td>
+              <td className="p-2"><div className="flex gap-0.5">
+                <Link to={`/admin/clients/${c.id}`} className="rounded-lg p-2 text-steel hover:bg-sheet hover:text-slate" title="עריכה" aria-label={`עריכת ${c.company_name || c.full_name}`}><Pencil className="h-4 w-4" /></Link>
+                {c.role !== "admin" && <button className="rounded-lg p-2 text-steel hover:bg-red-50 hover:text-red-700" title="מחיקה" aria-label={`מחיקת ${c.company_name || c.full_name}`}
+                  onClick={async () => { setErr(""); try { if (await confirmDeleteClient(c, s.total)) reload(); } catch (e) { setErr((e as Error).message); } }}><Trash2 className="h-4 w-4" /></button>}
+              </div></td>
             </tr>); })}</tbody>
         </table>
       </div>
@@ -237,6 +297,7 @@ export function AdminClients() {
 
 export function AdminClient() {
   const { id = "" } = useParams();
+  const nav = useNavigate();
   const { data: clients, reload } = useAsync(() => api.clients(), [id]);
   const { data: orders, reload: reloadOrders } = useAsync(() => api.orders({ all: true }), [id]);
   const [osel, setOsel] = useState<Set<string>>(new Set());
@@ -274,7 +335,11 @@ export function AdminClient() {
           </label>
           <p className="text-sm text-steel">התיקייה בדרייב: <bdi dir="ltr">{BUSINESS_DRIVE}{"\\"}{cur.drive_folder || "…"}</bdi>. אם השדה ריק, המחשב ממלא אותו לבד לפי שם העסק בהזמנה הראשונה. העבודות נפתחות בתוך CNC_FILES.</p>
           <section className="panel p-5"><h2 className="mb-4 text-2xl">הסטנדרט של הלקוח</h2><HardwareForm value={cur.defaults ?? { hinge: {}, drawer: {} }} onChange={(defaults) => set({ defaults })} /></section>
-          <div className="flex items-center gap-3"><button className="btn-cut px-8" onClick={save}>שמירה</button>{msg && <span role="status">{msg}</span>}</div>
+          <div className="flex flex-wrap items-center gap-3"><button className="btn-cut px-8" onClick={save}>שמירה</button>{msg && <span role="status">{msg}</span>}
+            <span className="flex-1" />
+            {c && c.role !== "admin" && <button className="btn-ghost text-red-700" onClick={async () => {
+              try { if (await confirmDeleteClient(c, (orders ?? []).filter((o) => o.user_id === c.id).length)) nav("/admin/clients"); } catch (e) { setMsg((e as Error).message); }
+            }}><Trash2 className="h-4 w-4" aria-hidden />מחיקת הלקוח</button>}</div>
         </div>
         <aside className="content-start">
           <BulkStatusBar ids={[...osel]} onDone={reloadOrders} onClear={() => setOsel(new Set())} />

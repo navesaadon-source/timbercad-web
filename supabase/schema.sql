@@ -126,6 +126,7 @@ create table if not exists public.orders (
 );
 create index if not exists orders_user_idx on public.orders(user_id);
 create index if not exists orders_status_idx on public.orders(status);
+alter table public.orders add column if not exists hidden boolean not null default false;
 create unique index if not exists orders_legacy_idx on public.orders(legacy_id) where legacy_id is not null;
 create index if not exists profiles_email_idx on public.profiles(lower(email));
 
@@ -159,7 +160,8 @@ begin
   end if;
   if new.user_id is distinct from old.user_id or new.admin_notes is distinct from old.admin_notes
      or new.sheets_count is distinct from old.sheets_count or new.hub_path is distinct from old.hub_path
-     or new.job_name is distinct from old.job_name or new.order_no is distinct from old.order_no then
+     or new.job_name is distinct from old.job_name or new.order_no is distinct from old.order_no
+     or new.hidden is distinct from old.hidden then
     raise exception 'Not allowed to change this field';
   end if;
   if old.status = 'submitted' then

@@ -1,5 +1,6 @@
 // Supabase Edge Function "admin": admin-only actions that need the service key.
 //   create_client – open a client account by e-mail (the client later signs in with Google / e-mail link, same address)
+//   delete_client – delete a client with all their orders and files
 //   set_email     – change a client's login e-mail (account and profile together)
 //   import        – bring clients and orders over from the previous system (safe to run again: skips what was imported)
 // Deploy: Edge Functions → Deploy a new function → name "admin" → paste → Deploy, then turn OFF "Verify JWT"
@@ -44,6 +45,7 @@ async function ensureClient(c: ClientIn) {
   // fill in only what is still empty, so nothing the client or admin already typed is overwritten
   const patch: Record<string, unknown> = {};
   for (const k of FIELDS) if (c[k] && !p[k]) patch[k] = c[k];
+  if (!p.company_name && !patch.company_name && (c.full_name || p.full_name)) patch.company_name = c.full_name || p.full_name;
   const d = p.defaults ?? {};
   const emptyDefaults = !d.connection_method && !Object.keys(d.hinge ?? {}).length && !Object.keys(d.drawer ?? {}).length;
   if (c.defaults && emptyDefaults) patch.defaults = c.defaults;
@@ -94,6 +96,28 @@ async function importAll(clients: ClientIn[], orders: OrderIn[]) {
   return { clientsCreated, clientsMatched, ordersInserted: inserted, ordersSkipped: skipped, problems };
 }
 
+async function removeFolder(bucket: string, prefix: string) {
+  for (;;) {
+    const { data } = await sb.storage.from(bucket).list(prefix, { limit: 100 });
+    if (!data?.length) return;
+    const files = data.filter((f) => f.id).map((f) => `${prefix}/${f.name}`);
+    for (const d of data.filter((f) => !f.id)) await removeFolder(bucket, `${prefix}/${d.name}`);
+    if (!files.length) return;
+    await sb.storage.from(bucket).remove(files);
+  }
+}
+
+async function deleteClient(id: string, me: string) {
+  if (id === me) throw new Error("אי אפשר למחוק את החשבון שלך");
+  const { data: p } = await sb.from("profiles").select("role").eq("id", id).maybeSingle();
+  if (p?.role === "admin") throw new Error("אי אפשר למחוק מנהל. קודם משנים את ההרשאה ללקוח");
+  for (const b of ["hubs", "project-files"]) { try { await removeFolder(b, id); } catch { /* files are best effort */ } }
+  const { error } = await sb.auth.admin.deleteUser(id);      // profile, orders and history go with it (on delete cascade)
+  if (error) throw error;
+  await sb.from("profiles").delete().eq("id", id);
+  return { id, deleted: true };
+}
+
 async function setEmail(id: string, email: string) {
   email = (email ?? "").trim().toLowerCase();
   if (!email.includes("@")) throw new Error(`כתובת מייל לא תקינה: ${email}`);
@@ -116,6 +140,7 @@ Deno.serve(async (req) => {
     if (me?.role !== "admin") return json({ error: "פעולה למנהל בלבד" }, 403);
     const body = await req.json();
     if (body.action === "create_client") return json(await ensureClient(body.client));
+    if (body.action === "delete_client") return json(await deleteClient(body.id, u.user.id));
     if (body.action === "set_email") return json(await setEmail(body.id, body.email));
     if (body.action === "import") return json(await importAll(body.clients ?? [], body.orders ?? []));
     return json({ error: "פעולה לא מוכרת" }, 400);

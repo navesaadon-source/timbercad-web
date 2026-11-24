@@ -43,6 +43,8 @@ export interface Order {
   sheets_count: number | null;
   hub_path: string | null;     // storage path of the job hub HTML (filled by the PC watcher)
   frozen_at: string | null;
+  /** hidden from the admin lists (e.g. old test orders) */
+  hidden?: boolean;
   created_at: string;
   updated_at: string;
   client?: Pick<Profile, "id" | "full_name" | "company_name" | "email" | "phone" | "drive_folder">;
