@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Attachment, CatalogItem, Order, OrderEvent, OrderStatus, Profile } from "./types";
+import type { LegacyClient, LegacyOrder } from "./legacy";
 import { SEED } from "./catalog-seed";
 import { ADMIN_EMAILS } from "@/config";
 
@@ -9,6 +10,11 @@ export const DEMO = !URL_ || !KEY_;
 
 export type NewOrder = Pick<Order, "project_name" | "hardware" | "carcass" | "fronts" | "notes"> & { user_id?: string };
 export type OrderPatch = Partial<Omit<Order, "id" | "order_no" | "created_at" | "updated_at" | "client">>;
+
+export type NewClient = Pick<Profile, "email" | "full_name" | "company_name" | "phone" | "drive_folder">;
+export interface ImportResult { clientsCreated: number; clientsMatched: number; ordersInserted: number; ordersSkipped: number; problems: string[] }
+/** heartbeat written by the hub watcher on the iMOS PC */
+export interface WatcherInfo { at: string; host: string; version: string; orders: number; error: string; new_client_folders: string[] }
 
 export interface Api {
   demo: boolean;
@@ -33,9 +39,12 @@ export interface Api {
   uploadFile(userId: string, orderId: string, file: File): Promise<Attachment>;
   fileUrl(path: string): Promise<string>;
   hubHtml(path: string): Promise<string>;
+  createClient(c: NewClient): Promise<{ id: string; created: boolean }>;
+  importLegacy(clients: LegacyClient[], orders: LegacyOrder[]): Promise<ImportResult>;
+  watcher(): Promise<WatcherInfo | null>;
 }
 
-const ORDER_SELECT = "*, client:profiles!orders_user_id_fkey(id, full_name, company_name, email, phone)";
+const ORDER_SELECT = "*, client:profiles!orders_user_id_fkey(id, full_name, company_name, email, phone, drive_folder)";
 
 // ───────────────────────── Supabase ─────────────────────────
 function supabaseApi(sb: SupabaseClient): Api {
@@ -91,7 +100,25 @@ function supabaseApi(sb: SupabaseClient): Api {
     async hubHtml(path) {
       const { data, error } = await sb.storage.from("hubs").download(path); if (error) throw error; return await data.text();
     },
+    async createClient(c) { return adminFn(sb, { action: "create_client", client: c }); },
+    async importLegacy(clients, orders) { return adminFn(sb, { action: "import", clients, orders }); },
+    async watcher() {
+      const r = ok(await sb.from("settings").select("value").eq("key", "watcher").maybeSingle()) as { value: string } | null;
+      try { return r ? JSON.parse(r.value) : null; } catch { return null; }
+    },
   };
+}
+
+/** calls the "admin" edge function (needs the service key, so it can't run in the browser) */
+async function adminFn<T>(sb: SupabaseClient, body: object): Promise<T> {
+  const { data, error } = await sb.functions.invoke("admin", { body });
+  if (error) {
+    let msg = error.message;
+    try { const j = await (error as { context?: Response }).context?.json(); if (j?.error) msg = j.error; } catch { /* keep message */ }
+    if (/Failed to send|404/i.test(msg)) msg = "פונקציית הניהול (admin) עוד לא הותקנה ב-Supabase";
+    throw new Error(msg);
+  }
+  return data as T;
 }
 
 // ───────────────────────── Demo (browser only) ─────────────────────────
@@ -147,7 +174,7 @@ function demoApi(): Api {
   const me = () => db.profiles.find((p) => p.id === db.user) ?? null;
   const withClient = (o: Order): Order => {
     const c = db.profiles.find((p) => p.id === o.user_id);
-    return { ...o, client: c && { id: c.id, full_name: c.full_name, company_name: c.company_name, email: c.email, phone: c.phone } };
+    return { ...o, client: c && { id: c.id, full_name: c.full_name, company_name: c.company_name, email: c.email, phone: c.phone, drive_folder: c.drive_folder } };
   };
   const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
   const delay = <T>(x: T) => new Promise<T>((r) => setTimeout(() => r(clone(x)), 60));
@@ -219,6 +246,36 @@ function demoApi(): Api {
       return { name: file.name, path, size: file.size, type: file.type };
     },
     async fileUrl() { return "#"; },
+    async createClient(c) {
+      const ex = db.profiles.find((p) => p.email.toLowerCase() === c.email.toLowerCase());
+      if (ex) return { id: ex.id, created: false };
+      const id = uid();
+      db.profiles.push({ id, role: "client", defaults: blankHw(), notes: "", created_at: now(), ...c, email: c.email.toLowerCase() });
+      save(); return { id, created: true };
+    },
+    async importLegacy(clients, orders) {
+      const res: ImportResult = { clientsCreated: 0, clientsMatched: 0, ordersInserted: 0, ordersSkipped: 0, problems: [] };
+      const idOf = new Map<string, string>();
+      for (const c of clients) {
+        const r = await this.createClient(c); idOf.set(c.legacy_id, r.id);
+        if (r.created) { res.clientsCreated++; db.profiles = db.profiles.map((p) => (p.id === r.id ? { ...p, notes: c.notes, defaults: c.defaults } : p)); }
+        else res.clientsMatched++;
+      }
+      const done = new Set(db.orders.map((o) => (o as Order & { legacy_id?: string }).legacy_id).filter(Boolean));
+      for (const o of [...orders].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""))) {
+        if (done.has(o.legacy_id)) { res.ordersSkipped++; continue; }
+        const t = o.created_at ?? now();
+        const order = { id: uid(), order_no: Math.max(1000, ...db.orders.map((x) => x.order_no)) + 1, user_id: idOf.get(o.legacy_user_id)!, job_name: o.project_name,
+          attachments: [], sheets_count: null, hub_path: null, frozen_at: null, created_at: t, updated_at: o.updated_at ?? t, ...o } as Order;
+        db.orders.push(order);
+        db.events.push({ id: uid(), order_id: order.id, actor_id: null, kind: "created", from_status: null, to_status: order.status, note: "יובא מהמערכת הקודמת", created_at: t });
+        res.ordersInserted++;
+      }
+      save(); return res;
+    },
+    async watcher() {
+      return { at: new Date(Date.now() - 40e3).toISOString(), host: "IMOS-PC", version: "3.0", orders: db.orders.length, error: "", new_client_folders: [] };
+    },
     async hubHtml() {
       // demo build: a real job hub is bundled from src/demo/hub-demo.html (kept out of git – it holds client data)
       if (import.meta.env.MODE === "demo") {

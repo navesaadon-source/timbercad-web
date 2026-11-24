@@ -106,7 +106,7 @@ export default function OrderPage({ admin = false }: { admin?: boolean }) {
             <h2 className="mb-3 text-xl">היסטוריה</h2>
             <ol className="grid gap-3 border-r-2 border-line pr-4">
               {(events ?? []).map((e) => (
-                <li key={e.id} className="text-sm"><div className="font-semibold">{eventText(e.kind, e.to_status)}</div><div className="num text-steel">{fmtDateTime(e.created_at)}</div></li>
+                <li key={e.id} className="text-sm"><div className="font-semibold">{eventText(e.kind, e.to_status, e.note)}</div><div className="num text-steel">{fmtDateTime(e.created_at)}</div></li>
               ))}
             </ol>
           </section>
@@ -127,8 +127,9 @@ function statusHelp(o: Order, admin: boolean) {
   }
 }
 
-function eventText(kind: string, to: OrderStatus | null) {
-  if (kind === "created") return "ההזמנה נפתחה";
+function eventText(kind: string, to: OrderStatus | null, note?: string | null) {
+  if (kind === "created") return note ? `ההזמנה נפתחה (${note})` : "ההזמנה נפתחה";
+  if (kind === "hub_ready") return note ? `מרכז העבודה מוכן · ${note} לוחות` : "מרכז העבודה מוכן";
   if (kind === "edited") return "ההזמנה עודכנה";
   if (kind === "frozen") return "העבודה הוקפאה";
   if (kind === "unfrozen") return "העבודה חודשה";
@@ -197,7 +198,7 @@ function AdminBox({ order, onStatus, onSave, onDelete, busy }:
         <p className="mt-1 text-sm text-steel">הלקוח רואה את הסטטוס מיד.</p>
       </div>
       <div><label className="label" htmlFor="a-job">שם העבודה ב-iMOS</label><input id="a-job" dir="auto" className="field" value={f.job_name} onChange={(e) => setF({ ...f, job_name: e.target.value })} />
-        <p className="mt-1 text-sm text-steel">השם של תיקיית העבודה ב-Imorder וב-CNC_FILES</p></div>
+        <p className="mt-1 text-sm text-steel">שומרים את העבודה באימוס בשם הזה בדיוק. התיקייה: <bdi dir="ltr" className="break-all">{order.client?.drive_folder || "…"}{"\\CNC_FILES\\"}{f.job_name || "…"}</bdi></p></div>
       <div><label className="label" htmlFor="a-sheets">מספר לוחות</label><input id="a-sheets" type="number" min={0} className="field num" value={f.sheets_count} onChange={(e) => setF({ ...f, sheets_count: e.target.value })} /></div>
       <div><label className="label" htmlFor="a-notes">הערות פנימיות</label><textarea id="a-notes" rows={3} className="field" value={f.admin_notes} onChange={(e) => setF({ ...f, admin_notes: e.target.value })} />
         <p className="mt-1 text-sm text-steel">הלקוח לא רואה את ההערות האלה</p></div>

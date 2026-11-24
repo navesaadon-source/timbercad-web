@@ -19,3 +19,6 @@ export const ADMIN_EMAILS = ["timbercad.cnc@gmail.com"];
 export const whatsappUrl = () =>
   !BUSINESS.whatsapp ? "" : BUSINESS.whatsapp.startsWith("http") ? BUSINESS.whatsapp
     : `https://wa.me/${BUSINESS.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(BUSINESS.whatsappText)}`;
+
+/** Drive root on the iMOS PC (for display only; the PC watcher has its own setting) */
+export const BUSINESS_DRIVE = "G:\\My Drive\\טימבר קאד";

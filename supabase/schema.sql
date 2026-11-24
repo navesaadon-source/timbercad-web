@@ -123,6 +123,8 @@ create table if not exists public.orders (
 );
 create index if not exists orders_user_idx on public.orders(user_id);
 create index if not exists orders_status_idx on public.orders(status);
+create unique index if not exists orders_legacy_idx on public.orders(legacy_id) where legacy_id is not null;
+create index if not exists profiles_email_idx on public.profiles(lower(email));
 
 drop trigger if exists orders_touch on public.orders;
 create trigger orders_touch before update on public.orders
@@ -231,22 +233,28 @@ end $$;
 
 create or replace function public.orders_log() returns trigger
 language plpgsql security definer set search_path = public as $$
-declare v_client jsonb; v_kind text;
+declare v_client jsonb; v_kind text; v_client_action boolean;
 begin
+  v_client_action := auth.uid() is not null and not public.is_admin();
   select to_jsonb(p) - 'defaults' - 'notes' into v_client from public.profiles p where p.id = new.user_id;
   if tg_op = 'INSERT' then
-    insert into public.order_events (order_id, actor_id, kind, to_status) values (new.id, auth.uid(), 'created', new.status);
-    if not public.is_admin() then
+    insert into public.order_events (order_id, actor_id, kind, to_status, note, created_at)
+      values (new.id, auth.uid(), 'created', new.status,
+              case when new.legacy_id is not null then 'יובא מהמערכת הקודמת' end, new.created_at);
+    if v_client_action then
       perform public.notify(jsonb_build_object('type', 'order_created', 'order', to_jsonb(new), 'client', v_client));
     end if;
     return new;
+  end if;
+  if new.hub_path is not null and old.hub_path is null then
+    insert into public.order_events (order_id, actor_id, kind, note) values (new.id, auth.uid(), 'hub_ready', new.sheets_count::text);
   end if;
   if new.status is distinct from old.status then
     v_kind := case when new.status = 'frozen' then 'frozen'
                    when old.status = 'frozen' then 'unfrozen' else 'status' end;
     insert into public.order_events (order_id, actor_id, kind, from_status, to_status)
       values (new.id, auth.uid(), v_kind, old.status, new.status);
-    if v_kind in ('frozen', 'unfrozen') and not public.is_admin() then
+    if v_kind in ('frozen', 'unfrozen') and v_client_action then
       perform public.notify(jsonb_build_object('type', 'order_' || v_kind, 'order', to_jsonb(new), 'client', v_client));
     end if;
   elsif (new.project_name, new.hardware, new.carcass, new.fronts, new.notes, new.attachments)
@@ -255,6 +263,7 @@ begin
   end if;
   return new;
 end $$;
+
 drop trigger if exists orders_log_trg on public.orders;
 create trigger orders_log_trg after insert or update on public.orders
   for each row execute function public.orders_log();

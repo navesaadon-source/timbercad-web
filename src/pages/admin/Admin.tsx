@@ -9,6 +9,8 @@ import { api } from "@/lib/api";
 import { useApp, useAsync } from "@/lib/store";
 import { ADMIN_STATUSES, STATUS } from "@/lib/status";
 import { CATEGORIES } from "@/lib/catalog-seed";
+import { WatcherStatus } from "@/components/WatcherStatus";
+import { BUSINESS_DRIVE } from "@/config";
 import type { Order, OrderStatus, Profile } from "@/lib/types";
 
 const TABS: { key: string; label: string; match: (s: OrderStatus) => boolean }[] = [
@@ -93,6 +95,7 @@ export function AdminOrders() {
         <button className="btn-ghost" onClick={exportCsv} disabled={!list.length}>CSV</button>
         <Link to="/admin/new" className="btn-cut"><Plus className="h-4 w-4" aria-hidden />הזמנה ללקוח</Link>
       </div>
+      <WatcherStatus />
       {count("frozen") > 0 && tab !== "frozen" && (
         <button onClick={() => setTab("frozen")} className="mb-4 w-full rounded-xl border border-warn/40 bg-warn/10 p-3 text-right font-semibold text-warn">
           {count("frozen")} הזמנות הוקפאו על ידי לקוחות. לחץ לצפייה
@@ -175,8 +178,33 @@ export function AdminNewOrder() {
   );
 }
 
+function NewClientForm({ onClose }: { onClose: () => void }) {
+  const nav = useNavigate();
+  const [f, setF] = useState({ email: "", company_name: "", full_name: "", phone: "", drive_folder: "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true); setErr("");
+    try { const r = await api.createClient({ ...f, email: f.email.trim() }); nav(`/admin/clients/${r.id}`); }
+    catch (x) { setErr((x as Error).message); setBusy(false); }
+  };
+  return (
+    <form onSubmit={save} className="panel mb-5 grid gap-4 p-5 sm:grid-cols-2">
+      <h2 className="text-xl sm:col-span-2">לקוח חדש</h2>
+      {([["email", "מייל (חובה, הלקוח נכנס איתו)", "ltr"], ["company_name", "שם העסק", "auto"], ["full_name", "שם איש קשר", "auto"], ["phone", "טלפון", "ltr"], ["drive_folder", "תיקייה בדרייב (אם ריק: לפי שם העסק)", "auto"]] as const).map(([k, l, d]) => (
+        <div key={k}><label className="label" htmlFor={`n-${k}`}>{l}</label>
+          <input id={`n-${k}`} className="field" dir={d} type={k === "email" ? "email" : "text"} required={k === "email"} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></div>
+      ))}
+      <p className="text-sm text-steel sm:col-span-2">הלקוח לא מקבל מייל. כשהוא נכנס לאתר עם הכתובת הזו (Google או קישור למייל), הוא רואה את ההזמנות שפתחת עבורו.</p>
+      <div className="flex gap-2 sm:col-span-2"><button className="btn-cut" disabled={busy}>{busy ? "יוצר…" : "יצירת לקוח"}</button><button type="button" className="btn-ghost" onClick={onClose}>ביטול</button></div>
+      {err && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{err}</p>}
+    </form>
+  );
+}
+
 export function AdminClients() {
   const { data: clients } = useAsync(() => api.clients(), []);
+  const [adding, setAdding] = useState(false);
   const { data: orders } = useAsync(() => api.orders({ all: true }), []);
   const [q, setQ] = useState("");
   const list = (clients ?? []).filter((c) => !q || `${c.company_name} ${c.full_name} ${c.email} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
@@ -187,14 +215,18 @@ export function AdminClients() {
   return (
     <AppShell admin title="לקוחות">
       <div className="mb-5 flex flex-wrap items-end gap-3"><h1 className="flex-1 text-3xl">לקוחות</h1>
-        <input className="field w-72" placeholder="חיפוש לקוח" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש לקוח" /></div>
+        <input className="field w-72" placeholder="חיפוש לקוח" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש לקוח" />
+        <Link to="/admin/import" className="btn-ghost">ייבוא מהמערכת הקודמת</Link>
+        <button className="btn-cut" onClick={() => setAdding(true)}><Plus className="h-4 w-4" aria-hidden />לקוח חדש</button></div>
+      {adding && <NewClientForm onClose={() => setAdding(false)} />}
       <div className="panel overflow-x-auto">
         <table className="w-full min-w-[700px] text-right">
-          <thead className="border-b border-line bg-sheet text-sm text-steel"><tr><th className="p-3">עסק</th><th className="p-3">איש קשר</th><th className="p-3">מייל</th><th className="p-3">טלפון</th><th className="p-3">הזמנות פתוחות</th><th className="p-3">סה״כ</th></tr></thead>
+          <thead className="border-b border-line bg-sheet text-sm text-steel"><tr><th className="p-3">עסק</th><th className="p-3">איש קשר</th><th className="p-3">מייל</th><th className="p-3">טלפון</th><th className="p-3">תיקייה בדרייב</th><th className="p-3">הזמנות פתוחות</th><th className="p-3">סה״כ</th></tr></thead>
           <tbody>{list.map((c) => { const s = stats(c.id); return (
             <tr key={c.id} className="border-b border-line last:border-0 hover:bg-sheet/60">
               <td className="p-3"><Link to={`/admin/clients/${c.id}`} className="font-semibold hover:underline">{c.company_name || "—"}</Link>{c.role === "admin" && <span className="mr-2 rounded bg-slate px-1.5 text-xs text-white">מנהל</span>}</td>
               <td className="p-3">{c.full_name}</td><td className="p-3" dir="ltr">{c.email}</td><td className="p-3" dir="ltr">{c.phone}</td>
+              <td className="p-3">{c.drive_folder || <span className="text-steel">—</span>}</td>
               <td className="num p-3">{s.open}</td><td className="num p-3">{s.total}</td>
             </tr>); })}</tbody>
         </table>
@@ -234,6 +266,7 @@ export function AdminClient() {
               <select id="c-role" className="field" value={cur.role} onChange={(e) => set({ role: e.target.value as Profile["role"] })}><option value="client">לקוח</option><option value="admin">מנהל</option></select></div>
             <div className="sm:col-span-2"><label className="label" htmlFor="c-notes">הערות פנימיות</label><textarea id="c-notes" rows={3} className="field" value={cur.notes} onChange={(e) => set({ notes: e.target.value })} /></div>
           </section>
+          <p className="-mt-3 text-sm text-steel">התיקייה בדרייב: <bdi dir="ltr">{BUSINESS_DRIVE}{"\\"}{cur.drive_folder || "…"}</bdi>. אם השדה ריק, המחשב ממלא אותו לבד לפי שם העסק בהזמנה הראשונה. העבודות נפתחות בתוך CNC_FILES.</p>
           <section className="panel p-5"><h2 className="mb-4 text-2xl">הסטנדרט של הלקוח</h2><HardwareForm value={cur.defaults ?? { hinge: {}, drawer: {} }} onChange={(defaults) => set({ defaults })} /></section>
           <div className="flex items-center gap-3"><button className="btn-cut px-8" onClick={save}>שמירה</button>{msg && <span role="status">{msg}</span>}</div>
         </div>

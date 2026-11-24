@@ -43,14 +43,14 @@ export interface Order {
   frozen_at: string | null;
   created_at: string;
   updated_at: string;
-  client?: Pick<Profile, "id" | "full_name" | "company_name" | "email" | "phone">;
+  client?: Pick<Profile, "id" | "full_name" | "company_name" | "email" | "phone" | "drive_folder">;
 }
 
 export interface OrderEvent {
   id: string;
   order_id: string;
   actor_id: string | null;
-  kind: "created" | "status" | "edited" | "frozen" | "unfrozen";
+  kind: "created" | "status" | "edited" | "frozen" | "unfrozen" | "hub_ready";
   from_status: OrderStatus | null;
   to_status: OrderStatus | null;
   note: string | null;
