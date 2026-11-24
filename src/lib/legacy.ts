@@ -2,6 +2,7 @@
 // Accepts CSV / XLSX / JSON exports of the tables: profiles, orders, and optionally options and user_roles.
 import * as XLSX from "xlsx";
 import type { HardwareSpec, OrderStatus } from "./types";
+import { BUSINESS_DRIVE } from "@/config";
 
 type Row = Record<string, unknown>;
 export type TableKind = "profiles" | "orders" | "options" | "user_roles" | "unknown";
@@ -57,6 +58,7 @@ export function folderName(v: unknown) {
   const s = nul(v).replace(/[\\/]+$/, ""); if (!s || /^https?:/i.test(s)) return "";
   const parts = s.split(/[\\/]+/).filter(Boolean);
   while (parts.length && /^(cnc_files|app)$/i.test(parts[parts.length - 1])) parts.pop();
+  if (parts.length && parts[parts.length - 1] === BUSINESS_DRIVE.split("\\").pop()) return "";   // the Drive root itself
   return (parts.pop() ?? "").replace(/[\\/:*?"<>|]+/g, " ").trim();
 }
 
