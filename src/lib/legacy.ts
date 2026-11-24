@@ -55,7 +55,9 @@ function date(v: unknown) {
 /** "G:\My Drive\טימבר קאד\COSMEC" → "COSMEC" */
 export function folderName(v: unknown) {
   const s = nul(v).replace(/[\\/]+$/, ""); if (!s || /^https?:/i.test(s)) return "";
-  return s.split(/[\\/]/).pop()!.replace(/[\\/:*?"<>|]+/g, " ").trim();
+  const parts = s.split(/[\\/]+/).filter(Boolean);
+  while (parts.length && /^(cnc_files|app)$/i.test(parts[parts.length - 1])) parts.pop();
+  return (parts.pop() ?? "").replace(/[\\/:*?"<>|]+/g, " ").trim();
 }
 
 export function mapStatus(status: unknown, billing: unknown): OrderStatus {
