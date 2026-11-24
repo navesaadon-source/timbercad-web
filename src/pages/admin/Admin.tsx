@@ -10,6 +10,7 @@ import { useApp, useAsync } from "@/lib/store";
 import { ADMIN_STATUSES, STATUS } from "@/lib/status";
 import { CATEGORIES } from "@/lib/catalog-seed";
 import { WatcherStatus } from "@/components/WatcherStatus";
+import { ColumnFilter, type FilterValue } from "@/components/ColumnFilter";
 import { BUSINESS_DRIVE } from "@/config";
 import type { Order, OrderStatus, Profile } from "@/lib/types";
 
@@ -23,6 +24,30 @@ const TABS: { key: string; label: string; hint: string; match: (s: OrderStatus) 
   { key: "cancelled", label: "בוטלו", hint: "ארכיון", match: (s) => s === "cancelled" },
   { key: "all", label: "כל ההזמנות", hint: "בלי סינון", match: () => true },
 ];
+
+type SortKey = "order_no" | "project_name" | "client" | "created_at" | "sheets_count" | "status";
+const STATUS_ORDER: OrderStatus[] = ["frozen", "submitted", "production", "done", "billing", "billed", "cancelled"];
+function sortVal(o: Order, k: SortKey): string | number {
+  if (k === "client") return o.client?.company_name || o.client?.full_name || "";
+  if (k === "status") return STATUS_ORDER.indexOf(o.status);
+  if (k === "sheets_count") return o.sheets_count ?? -1;
+  return o[k] ?? "";
+}
+const MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
+/** the value a column filter compares (dates by month, like Excel's date groups) */
+function cellKey(o: Order, k: SortKey): string {
+  if (k === "created_at") return o.created_at.slice(0, 7);
+  if (k === "status") return o.status;
+  if (k === "sheets_count") return o.sheets_count == null ? "" : String(o.sheets_count);
+  return String(sortVal(o, k));
+}
+function cellLabel(o: Order, k: SortKey): string {
+  if (k === "created_at") { const [y, m] = o.created_at.slice(0, 7).split("-"); return `${MONTHS[+m - 1]} ${y}`; }
+  if (k === "status") return STATUS[o.status].label;
+  if (k === "sheets_count") return o.sheets_count == null ? "(ריק)" : String(o.sheets_count);
+  return cellKey(o, k) || "(ריק)";
+}
+const cmp = (a: string | number, b: string | number) => (typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b), "he", { numeric: true }));
 
 const daysAgo = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 
@@ -91,6 +116,8 @@ export function AdminOrders() {
   const [q, setQ] = useState("");
   const [client, setClient] = useState("");
   const [showHidden, setShowHidden] = useState(false);
+  const [colf, setColf] = useState<Partial<Record<SortKey, Set<string>>>>({});
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "order_no", dir: -1 });
   const [sel, setSel] = useState<Set<string>>(new Set());
   const { hw, mat } = useSpecText();
   const hiddenCount = (orders ?? []).filter((o) => o.hidden).length;
@@ -101,8 +128,28 @@ export function AdminOrders() {
     return [...m].sort((a, b) => a[1].localeCompare(b[1], "he"));
   }, [orders]);
   const t = TABS.find((x) => x.key === tab)!;
-  const list = visible.filter((o) => t.match(o.status) && (!client || o.user_id === client) &&
+  const base = visible.filter((o) => t.match(o.status) && (!client || o.user_id === client) &&
     (!q || `${o.order_no} ${o.project_name} ${o.job_name} ${o.client?.company_name} ${o.client?.full_name}`.toLowerCase().includes(q.toLowerCase())));
+  const passes = (o: Order, skip?: SortKey) => (Object.keys(colf) as SortKey[]).every((k) => k === skip || !colf[k] || colf[k]!.has(cellKey(o, k)));
+  const list = base.filter((o) => passes(o)).sort((a, b) => sort.dir * cmp(sortVal(a, sort.key), sortVal(b, sort.key)));
+  /** values offered in a column's checklist: from the rows the other column filters leave (like Excel) */
+  const valuesFor = (k: SortKey): FilterValue[] => {
+    const m = new Map<string, FilterValue & { s: string | number }>();
+    base.filter((o) => passes(o, k)).forEach((o) => {
+      const v = cellKey(o, k); const e = m.get(v);
+      if (e) e.count++; else m.set(v, { value: v, label: cellLabel(o, k), count: 1, s: k === "created_at" ? v : sortVal(o, k) });
+    });
+    return [...m.values()].sort((a, b) => cmp(a.s, b.s));
+  };
+  const filtered = !!(q || client || Object.keys(colf).length);
+  const clearFilters = () => { setQ(""); setClient(""); setColf({}); };
+  const th = (key: SortKey, label: string) => (
+    <th className="p-2" aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+      <ColumnFilter label={label} values={valuesFor(key)} selected={colf[key] ?? null}
+        onChange={(sel) => setColf((c) => { const n = { ...c }; if (sel) n[key] = sel; else delete n[key]; return n; })}
+        sortDir={sort.key === key ? sort.dir : 0} onSort={(dir) => setSort({ key, dir })} />
+    </th>
+  );
 
   const quickStatus = async (o: Order, s: OrderStatus) => { await api.updateOrder(o.id, { status: s }); reload(); };
   const toggleHidden = async (o: Order) => { await api.updateOrder(o.id, { hidden: !o.hidden }); reload(); };
@@ -155,6 +202,12 @@ export function AdminOrders() {
             {showHidden ? <><Eye className="h-4 w-4" aria-hidden />חזרה להזמנות</> : <><EyeOff className="h-4 w-4" aria-hidden />מוסתרות ({hiddenCount})</>}
           </button>)}
       </div>
+      <div className="mb-3 flex flex-wrap items-end gap-3 text-sm">
+        <span className="text-steel">לסינון ומיון לוחצים על כותרת העמודה, כמו באקסל.</span>
+        <span className="flex-1" />
+        <span className="pb-2 text-steel" role="status">{list.length} הזמנות בתצוגה</span>
+        {filtered && <button className="btn-ghost py-1.5" onClick={clearFilters}><X className="h-4 w-4" aria-hidden />ניקוי סינון</button>}
+      </div>
       {showHidden && <p className="mb-3 rounded-lg bg-sheet p-3 text-sm text-steel">מוצגות ההזמנות שהסתרת. הן לא נספרות בלוח ולא מופיעות ברשימות. הלקוח עדיין רואה אותן אצלו.</p>}
       {error && <p role="alert" className="text-red-700">{error}</p>}
       <BulkStatusBar ids={[...sel].filter((id) => list.some((o) => o.id === id))} onDone={reload} onClear={() => setSel(new Set())} manage={{ hiddenView: showHidden }} />
@@ -164,7 +217,7 @@ export function AdminOrders() {
             <thead className="border-b border-line bg-sheet text-sm text-steel">
               <tr><th className="w-10 p-3"><input type="checkbox" className="h-4 w-4 accent-slate" aria-label="בחירת כל ההזמנות בתצוגה"
                 checked={list.length > 0 && list.every((o) => sel.has(o.id))}
-                onChange={(e) => setSel(e.target.checked ? new Set(list.map((o) => o.id)) : new Set())} /></th><th className="p-3">#</th><th className="p-3">פרויקט</th><th className="p-3">לקוח</th><th className="p-3">נפתחה</th><th className="p-3">לוחות</th><th className="p-3">סטטוס</th><th className="p-3">שינוי סטטוס</th><th className="p-3"><span className="sr-only">פעולות</span></th></tr>
+                onChange={(e) => setSel(e.target.checked ? new Set(list.map((o) => o.id)) : new Set())} /></th>{th("order_no", "#")}{th("project_name", "פרויקט")}{th("client", "לקוח")}{th("created_at", "נפתחה")}{th("sheets_count", "לוחות")}{th("status", "סטטוס")}<th className="p-3">שינוי סטטוס</th><th className="p-3"><span className="sr-only">פעולות</span></th></tr>
             </thead>
             <tbody>
               {list.map((o) => (
