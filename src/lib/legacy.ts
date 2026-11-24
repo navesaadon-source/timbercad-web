@@ -8,7 +8,7 @@ type Row = Record<string, unknown>;
 export type TableKind = "profiles" | "orders" | "options" | "user_roles" | "unknown";
 
 export interface LegacyClient {
-  legacy_id: string; email: string; full_name: string; company_name: string; phone: string; notes: string; drive_folder: string; defaults: HardwareSpec;
+  legacy_id: string; email: string; full_name: string; company_name: string; phone: string; notes: string; drive_folder: string; defaults: HardwareSpec; auto_folders?: boolean;
 }
 export interface LegacyOrder {
   legacy_id: string; legacy_user_id: string; project_name: string; status: OrderStatus; hardware: HardwareSpec;
@@ -83,7 +83,8 @@ export function mapAll(files: LegacyFile[]): Mapped {
 
   const clients: LegacyClient[] = of("profiles").map((p) => ({
     legacy_id: str(p.id), email: nul(p.email).toLowerCase(), full_name: nul(p.full_name), company_name: nul(p.company_name),
-    phone: nul(p.phone), notes: nul(p.notes), drive_folder: folderName(p.sync_path),
+    phone: nul(p.phone), notes: nul(p.notes), drive_folder: folderName(p.drive_folder ?? p.sync_path),
+    ...(str(p.auto_folders).toLowerCase() === "false" ? { auto_folders: false } : {}),
     defaults: {
       ...(nul(p.default_connection_method) ? { connection_method: nul(p.default_connection_method) } : {}),
       hinge: obj(p.default_hinge, {}), drawer: obj(p.default_drawer, {}),

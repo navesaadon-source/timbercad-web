@@ -1,5 +1,6 @@
 // Supabase Edge Function "admin": admin-only actions that need the service key.
 //   create_client – open a client account by e-mail (the client later signs in with Google / e-mail link, same address)
+//   set_email     – change a client's login e-mail (account and profile together)
 //   import        – bring clients and orders over from the previous system (safe to run again: skips what was imported)
 // Deploy: Edge Functions → Deploy a new function → name "admin" → paste → Deploy, then turn OFF "Verify JWT"
 // (the function checks the signed-in user and the admin role itself).
@@ -17,7 +18,7 @@ const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
   (() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default ?? ""; } catch { return ""; } })();
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
-type ClientIn = { legacy_id?: string; email: string; full_name?: string; company_name?: string; phone?: string; notes?: string; drive_folder?: string; defaults?: unknown };
+type ClientIn = { legacy_id?: string; email: string; full_name?: string; company_name?: string; phone?: string; notes?: string; drive_folder?: string; defaults?: unknown; auto_folders?: boolean };
 type OrderIn = { legacy_id: string; legacy_user_id: string; project_name: string; status: string; hardware?: unknown; carcass?: unknown; fronts?: unknown;
   notes?: string; admin_notes?: string; created_at?: string; updated_at?: string };
 
@@ -46,6 +47,7 @@ async function ensureClient(c: ClientIn) {
   const d = p.defaults ?? {};
   const emptyDefaults = !d.connection_method && !Object.keys(d.hinge ?? {}).length && !Object.keys(d.drawer ?? {}).length;
   if (c.defaults && emptyDefaults) patch.defaults = c.defaults;
+  if (c.auto_folders === false && p.auto_folders !== false) patch.auto_folders = false;
   if (Object.keys(patch).length) {
     const { error } = await sb.from("profiles").update(patch).eq("id", p.id);
     if (error) throw error;
@@ -92,6 +94,18 @@ async function importAll(clients: ClientIn[], orders: OrderIn[]) {
   return { clientsCreated, clientsMatched, ordersInserted: inserted, ordersSkipped: skipped, problems };
 }
 
+async function setEmail(id: string, email: string) {
+  email = (email ?? "").trim().toLowerCase();
+  if (!email.includes("@")) throw new Error(`כתובת מייל לא תקינה: ${email}`);
+  const { data: other } = await sb.from("profiles").select("id").ilike("email", email).neq("id", id).maybeSingle();
+  if (other) throw new Error("כבר יש לקוח עם המייל הזה");
+  const { error } = await sb.auth.admin.updateUserById(id, { email, email_confirm: true });
+  if (error) throw error;
+  const { error: e2 } = await sb.from("profiles").update({ email }).eq("id", id);
+  if (e2) throw e2;
+  return { id, email };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -102,6 +116,7 @@ Deno.serve(async (req) => {
     if (me?.role !== "admin") return json({ error: "פעולה למנהל בלבד" }, 403);
     const body = await req.json();
     if (body.action === "create_client") return json(await ensureClient(body.client));
+    if (body.action === "set_email") return json(await setEmail(body.id, body.email));
     if (body.action === "import") return json(await importAll(body.clients ?? [], body.orders ?? []));
     return json({ error: "פעולה לא מוכרת" }, 400);
   } catch (e) {

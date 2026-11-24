@@ -40,6 +40,7 @@ export interface Api {
   fileUrl(path: string): Promise<string>;
   hubHtml(path: string): Promise<string>;
   createClient(c: NewClient): Promise<{ id: string; created: boolean }>;
+  setEmail(id: string, email: string): Promise<void>;
   importLegacy(clients: LegacyClient[], orders: LegacyOrder[]): Promise<ImportResult>;
   watcher(): Promise<WatcherInfo | null>;
 }
@@ -101,6 +102,7 @@ function supabaseApi(sb: SupabaseClient): Api {
       const { data, error } = await sb.storage.from("hubs").download(path); if (error) throw error; return await data.text();
     },
     async createClient(c) { return adminFn(sb, { action: "create_client", client: c }); },
+    async setEmail(id, email) { await adminFn(sb, { action: "set_email", id, email }); },
     async importLegacy(clients, orders) { return adminFn(sb, { action: "import", clients, orders }); },
     async watcher() {
       const r = ok(await sb.from("settings").select("value").eq("key", "watcher").maybeSingle()) as { value: string } | null;
@@ -253,6 +255,7 @@ function demoApi(): Api {
       db.profiles.push({ id, role: "client", defaults: blankHw(), notes: "", created_at: now(), ...c, email: c.email.toLowerCase() });
       save(); return { id, created: true };
     },
+    async setEmail(id, email) { db.profiles = db.profiles.map((p) => (p.id === id ? { ...p, email: email.trim().toLowerCase() } : p)); save(); },
     async importLegacy(clients, orders) {
       const res: ImportResult = { clientsCreated: 0, clientsMatched: 0, ordersInserted: 0, ordersSkipped: 0, problems: [] };
       const idOf = new Map<string, string>();

@@ -15,11 +15,14 @@ create table if not exists public.profiles (
   defaults      jsonb not null default '{"hinge":{},"drawer":{}}'::jsonb,
   notes         text not null default '',
   drive_folder  text not null default '',
+  auto_folders  boolean not null default true,   -- false: service client, no automatic job folders
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
 
 -- admin e-mails get the admin role automatically on first sign-in
+alter table public.profiles add column if not exists auto_folders boolean not null default true;
+
 create table if not exists public.admin_emails (email text primary key);
 insert into public.admin_emails values ('timbercad.cnc@gmail.com') on conflict do nothing;
 alter table public.admin_emails enable row level security;  -- no policies: readable only by the sign-up trigger
@@ -59,7 +62,7 @@ create or replace function public.profiles_guard() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
   if auth.uid() is null or public.is_admin() then return new; end if;
-  if new.role is distinct from old.role or new.notes is distinct from old.notes
+  if new.role is distinct from old.role or new.notes is distinct from old.notes or new.auto_folders is distinct from old.auto_folders
      or new.drive_folder is distinct from old.drive_folder or new.email is distinct from old.email then
     raise exception 'Not allowed to change this field';
   end if;

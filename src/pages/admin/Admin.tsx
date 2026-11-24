@@ -247,8 +247,10 @@ export function AdminClient() {
   if (!cur) return <AppShell admin title="לקוח"><p className="text-steel">טוען…</p></AppShell>;
   const set = (p: Partial<Profile>) => setF({ ...cur, ...p });
   const save = async () => {
-    const { full_name, company_name, phone, defaults, notes, drive_folder, role } = cur;
-    try { await api.updateProfile(id, { full_name, company_name, phone, defaults, notes, drive_folder, role }); setMsg("נשמר"); setF(null); reload(); } catch (e) { setMsg((e as Error).message); }
+    const { full_name, company_name, phone, defaults, notes, drive_folder, role, auto_folders } = cur;
+    try {
+      if (c && cur.email.trim().toLowerCase() !== c.email.toLowerCase()) await api.setEmail(id!, cur.email);
+      await api.updateProfile(id, { full_name, company_name, phone, defaults, notes, drive_folder, role, auto_folders }); setMsg("נשמר"); setF(null); reload(); } catch (e) { setMsg((e as Error).message); }
   };
   const mine = orders?.filter((o) => o.user_id === id) ?? [];
   return (
@@ -261,12 +263,16 @@ export function AdminClient() {
             {([["full_name", "שם איש קשר"], ["company_name", "שם העסק"], ["phone", "טלפון"], ["drive_folder", "תיקיית לקוח בדרייב"]] as const).map(([k, l]) => (
               <div key={k}><label className="label" htmlFor={`c-${k}`}>{l}</label><input id={`c-${k}`} className="field" dir="auto" value={cur[k]} onChange={(e) => set({ [k]: e.target.value })} /></div>
             ))}
-            <div><span className="label">מייל</span><div className="py-2.5" dir="ltr">{cur.email}</div></div>
+            <div><label className="label" htmlFor="c-email">מייל (הלקוח נכנס איתו)</label><input id="c-email" type="email" className="field" dir="ltr" value={cur.email} onChange={(e) => set({ email: e.target.value })} /></div>
             <div><label className="label" htmlFor="c-role">הרשאה</label>
               <select id="c-role" className="field" value={cur.role} onChange={(e) => set({ role: e.target.value as Profile["role"] })}><option value="client">לקוח</option><option value="admin">מנהל</option></select></div>
             <div className="sm:col-span-2"><label className="label" htmlFor="c-notes">הערות פנימיות</label><textarea id="c-notes" rows={3} className="field" value={cur.notes} onChange={(e) => set({ notes: e.target.value })} /></div>
           </section>
-          <p className="-mt-3 text-sm text-steel">התיקייה בדרייב: <bdi dir="ltr">{BUSINESS_DRIVE}{"\\"}{cur.drive_folder || "…"}</bdi>. אם השדה ריק, המחשב ממלא אותו לבד לפי שם העסק בהזמנה הראשונה. העבודות נפתחות בתוך CNC_FILES.</p>
+          <label className="-mt-2 flex items-start gap-2">
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-cut" checked={cur.auto_folders !== false} onChange={(e) => set({ auto_folders: e.target.checked })} />
+            <span><b>פתיחת תיקייה בדרייב לכל הזמנה</b><br /><span className="text-sm text-steel">לבטל ללקוחות שירות (למשל לקוחות iMOS) שלא צריכים תיקיית עבודה לכל הזמנה. מרכז העבודה עדיין יעלה להזמנה אם קיימת תיקייה בשם העבודה.</span></span>
+          </label>
+          <p className="text-sm text-steel">התיקייה בדרייב: <bdi dir="ltr">{BUSINESS_DRIVE}{"\\"}{cur.drive_folder || "…"}</bdi>. אם השדה ריק, המחשב ממלא אותו לבד לפי שם העסק בהזמנה הראשונה. העבודות נפתחות בתוך CNC_FILES.</p>
           <section className="panel p-5"><h2 className="mb-4 text-2xl">הסטנדרט של הלקוח</h2><HardwareForm value={cur.defaults ?? { hinge: {}, drawer: {} }} onChange={(defaults) => set({ defaults })} /></section>
           <div className="flex items-center gap-3"><button className="btn-cut px-8" onClick={save}>שמירה</button>{msg && <span role="status">{msg}</span>}</div>
         </div>

@@ -19,7 +19,9 @@ export interface Profile {
   role: Role;
   defaults: HardwareSpec;      // one-time standard, loaded into each new order
   notes: string;               // admin-only notes
-  drive_folder: string;        // customer folder name under the Drive root (e.g. COSMEC)
+  drive_folder: string;
+  /** false = service client: the PC does not open job folders for its orders */
+  auto_folders?: boolean;        // customer folder name under the Drive root (e.g. COSMEC)
   created_at: string;
 }
 
