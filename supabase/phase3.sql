@@ -40,3 +40,8 @@ end $$;
 -- the import looks orders up by their id in the previous system
 create unique index if not exists orders_legacy_idx on public.orders(legacy_id) where legacy_id is not null;
 create index if not exists profiles_email_idx on public.profiles(lower(email));
+
+-- the PC watcher and the "admin" function use the secret key (service_role): give it table rights
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;

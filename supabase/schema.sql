@@ -291,3 +291,8 @@ grant select, insert, update, delete on public.profiles, public.orders, public.c
 grant select on public.order_events to authenticated;
 grant usage, select on sequence public.order_no_seq to authenticated;
 revoke execute on function public.notify(jsonb) from public, anon, authenticated;
+
+-- the PC watcher and the "admin" function use the secret key (service_role): give it table rights
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
