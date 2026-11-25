@@ -45,7 +45,7 @@ export default function OrderPage({ admin = false }: { admin?: boolean }) {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="grid content-start gap-6">
-          <section className="panel p-5">
+          {!o.is_sample && <section className="panel p-5">
             <StatusLine status={o.status} />
             <p className="mt-4 text-steel">{statusHelp(o, isAdmin)}</p>
             {!isAdmin && (
@@ -57,7 +57,7 @@ export default function OrderPage({ admin = false }: { admin?: boolean }) {
               </div>
             )}
             {confirm === "freeze" && (
-              <Confirm busy={busy} onNo={() => setConfirm("")} yes="הקפאה" onYes={() => setStatus("frozen", "העבודה הוקפאה. נווה קיבל התראה ויחזור אליך.")}>
+              <Confirm busy={busy} onNo={() => setConfirm("")} yes="הקפאה" onYes={() => setStatus("frozen", "העבודה הוקפאה. קיבלנו התראה ונחזור אליך.")}>
                 נעצור את העבודה על ההזמנה עד שתבקש להמשיך. נשלחת התראה מיידית.
               </Confirm>
             )}
@@ -65,7 +65,7 @@ export default function OrderPage({ admin = false }: { admin?: boolean }) {
               <Confirm busy={busy} onNo={() => setConfirm("")} yes="ביטול ההזמנה" danger onYes={() => setStatus("cancelled", "ההזמנה בוטלה.")}>לבטל את ההזמנה? אי אפשר לבטל את הפעולה.</Confirm>
             )}
             {msg && <p role="status" className="mt-3 font-semibold">{msg}</p>}
-          </section>
+          </section>}
 
           {o.hub_path && <HubCard order={o} />}
 
@@ -74,7 +74,7 @@ export default function OrderPage({ admin = false }: { admin?: boolean }) {
               initial={{ project_name: o.project_name, hardware: o.hardware, carcass: o.carcass, fronts: o.fronts, notes: o.notes } as Draft}
               saveLabel="שמירת השינויים" busy={busy} onCancel={() => setEditing(false)}
               onSave={(d) => act(async () => { await api.updateOrder(id, d); setEditing(false); }, "השינויים נשמרו.")} />
-          ) : (
+          ) : o.is_sample ? null : (
             <section className="panel p-5">
               <div className="mb-4 flex items-center justify-between"><h2 className="text-2xl">פרטי ההזמנה</h2>
                 {isAdmin && <button className="btn-ghost" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" aria-hidden />עריכה</button>}</div>
@@ -155,7 +155,11 @@ function HubCard({ order }: { order: Order }) {
   const [err, setErr] = useState("");
   const open = async () => {
     setBusy(true); setErr("");
-    try { setHtml(await api.hubHtml(order.hub_path!)); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try { setHtml(await api.hubHtml(order.hub_path!)); }
+    catch (e) {
+      const m = (e as Error).message ?? "";
+      setErr(/not found|404|does not exist/i.test(m) ? "מרכז העבודה עוד בהכנה. הוא יופיע כאן כמה דקות אחרי שייצוא התוכניות מסתיים." : m);
+    } finally { setBusy(false); }
   };
   const newTab = () => { if (!html) return; const url = URL.createObjectURL(new Blob([html], { type: "text/html" })); window.open(url, "_blank", "noopener"); };
   useEffect(() => {
@@ -169,7 +173,7 @@ function HubCard({ order }: { order: Order }) {
       <LayoutGrid className="h-9 w-9 text-ply" aria-hidden />
       <div className="flex-1"><h2 className="text-2xl">מרכז העבודה</h2><p className="text-white/75">פריסת פלטות ומדבקות, דוחות בנייה, פרזול, תוכניות וקבצי מכונה.</p></div>
       <button className="btn-cut" onClick={open} disabled={busy}><ExternalLink className="h-4 w-4" aria-hidden />{busy ? "טוען…" : "פתיחת מרכז העבודה"}</button>
-      {err && <p role="alert" className="w-full text-sm text-red-200">{err}</p>}
+      {err && <p role="status" className="w-full text-sm text-white/85">{err}</p>}
       {html && (
         <div role="dialog" aria-label={`מרכז העבודה – ${order.project_name}`} className="fixed inset-0 z-[60] flex flex-col bg-slate">
           <div className="flex items-center gap-3 px-4 py-2 text-white">
