@@ -1,6 +1,6 @@
 import { Link, NavLink } from "react-router-dom";
-import { useState, type ReactNode } from "react";
-import { Menu, X, Mail, Phone, MessageCircle } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Menu, X, Mail, Phone, MessageCircle, UserRound } from "lucide-react";
 import logo from "@/assets/logo.jpeg";
 import { BUSINESS, whatsappUrl } from "@/config";
 import { useApp } from "@/lib/store";
@@ -14,32 +14,49 @@ export function Logo({ light = false }: { light?: boolean }) {
   );
 }
 
-const LINKS: [string, string][] = [["/#services", "שירותים"], ["/#process", "איך זה עובד"], ["/#contact", "צור קשר"]];
+const LINKS: [string, string][] = [["services", "שירותים"], ["process", "איך עובדים"], ["contact", "צור קשר"]];
 
+const sideBtn = "border-2 border-slate bg-white px-4 py-2.5 text-[15px] font-bold text-slate hover:bg-sheet";
+
+/** The logo bar: the logo itself is the background, edge to edge. Buttons sit only at the two sides,
+ *  never over the centred logo. Shrinks a little once the page scrolls. */
 export function SiteHeader() {
   const { me } = useApp();
   const [open, setOpen] = useState(false);
+  const [small, setSmall] = useState(false);
+  useEffect(() => {
+    const on = () => setSmall(window.scrollY > 120);
+    on(); window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  const go = (id: string) => (e: React.MouseEvent) => { e.preventDefault(); setOpen(false); scrollToId(id); };
+  const area = me ? (me.role === "admin" ? "/admin" : "/portal") : "/login";
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-6 px-5 py-3">
-        <Logo />
-        <nav className="hidden flex-1 gap-1 md:flex" aria-label="ניווט ראשי">
-          {LINKS.map(([to, t]) => <a key={to} href={"#" + to.slice(2)} onClick={(e) => { e.preventDefault(); scrollToId(to.slice(2)); }}
-            className="rounded-md px-3 py-2 text-steel hover:bg-sheet hover:text-slate">{t}</a>)}
-        </nav>
-        <div className="mr-auto flex items-center gap-2 md:mr-0">
-          <Link to={me ? (me.role === "admin" ? "/admin" : "/portal") : "/login"} className="btn-primary whitespace-nowrap px-3 sm:px-4">
-            {me ? "לאזור האישי" : "כניסה ללקוחות"}
-          </Link>
-          <button className="btn-ghost px-2.5 md:hidden" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="תפריט">
+    <header className="sticky top-0 z-40">
+      <div className={`logo-banner relative border-b-[5px] border-cut transition-[height] duration-200 ${small ? "h-[84px] md:h-[110px]" : "h-[120px] md:h-[200px]"}`}>
+        <Link to="/" className="absolute inset-y-0 left-1/2 w-[46%] max-w-[440px] -translate-x-1/2" aria-label={`${BUSINESS.name} – דף הבית`} />
+        <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 md:px-8">
+          <nav className="hidden gap-2 md:flex" aria-label="ניווט ראשי">
+            {LINKS.slice(0, 2).map(([id, t]) => <a key={id} href={`#${id}`} onClick={go(id)} className={sideBtn}>{t}</a>)}
+          </nav>
+          <button className="grid h-11 w-11 place-items-center border-2 border-slate bg-white md:hidden" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="תפריט">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
+          <div className="flex gap-2">
+            <a href="#contact" onClick={go("contact")} className={`${sideBtn} hidden md:inline-block`}>צור קשר</a>
+            <Link to={area} className="hidden border-2 border-slate bg-slate px-4 py-2.5 text-[15px] font-bold text-white hover:bg-slate-2 md:inline-block">
+              {me ? "לאזור האישי" : "כניסה ללקוחות"}
+            </Link>
+            <Link to={area} className="grid h-11 w-11 place-items-center border-2 border-slate bg-slate text-white md:hidden" aria-label={me ? "לאזור האישי" : "כניסה ללקוחות"}>
+              <UserRound className="h-5 w-5" aria-hidden />
+            </Link>
+          </div>
         </div>
       </div>
       {open && (
-        <nav className="border-t border-line px-5 py-2 md:hidden" aria-label="ניווט ראשי">
-          {LINKS.map(([to, t]) => <a key={to} href={"#" + to.slice(2)} onClick={(e) => { e.preventDefault(); setOpen(false); scrollToId(to.slice(2)); }}
-            className="block rounded-md px-2 py-3 text-lg">{t}</a>)}
+        <nav className="border-b-2 border-slate bg-white px-5 py-2 md:hidden" aria-label="ניווט ראשי">
+          {LINKS.map(([id, t]) => <a key={id} href={`#${id}`} onClick={go(id)} className="block px-2 py-3 text-lg font-bold">{t}</a>)}
+          <Link to={area} className="block px-2 py-3 text-lg font-bold text-cut-ink">{me ? "לאזור האישי" : "כניסה ללקוחות"}</Link>
         </nav>
       )}
     </header>
@@ -95,7 +112,7 @@ export function PublicPage({ children }: { children: ReactNode }) {
 export function NavItem({ to, children, end }: { to: string; children: ReactNode; end?: boolean }) {
   return (
     <NavLink to={to} end={end} className={({ isActive }) =>
-      `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold ${isActive ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white"}`}>
+      `whitespace-nowrap border-b-4 px-4 py-3 text-[15px] font-bold ${isActive ? "border-cut text-white" : "border-transparent text-white/75 hover:text-white"}`}>
       {children}
     </NavLink>
   );

@@ -1,7 +1,8 @@
 import { Navigate, useNavigate } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { LogOut } from "lucide-react";
-import { Logo, NavItem } from "./Site";
+import { Link } from "react-router-dom";
+import { NavItem } from "./Site";
 import { useApp } from "@/lib/store";
 import { api } from "@/lib/api";
 import { STATUS, FLOW, flowIndex } from "@/lib/status";
@@ -16,10 +17,20 @@ export function AppShell({ admin = false, children, title }: { admin?: boolean; 
   if (admin && me.role !== "admin") return <Navigate to="/portal" replace />;
   return (
     <div className="min-h-screen">
-      <header className="bg-slate">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
-          <Logo light />
-          <nav className="flex flex-1 gap-1 overflow-x-auto" aria-label="ניווט באזור האישי">
+      <header>
+        <div className="logo-banner relative h-[84px] border-b-[5px] border-cut md:h-[110px]">
+          <Link to="/" className="absolute inset-y-0 left-1/2 w-[46%] max-w-[300px] -translate-x-1/2" aria-label="TimberCad – דף הבית" />
+          <div className="mx-auto flex h-full max-w-7xl items-center justify-end px-4 md:px-8">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="hidden border-2 border-slate bg-white px-3 py-2 font-bold sm:inline">{me.company_name || me.full_name}</span>
+              <button onClick={async () => { await api.signOut(); nav("/"); }} className="inline-flex h-11 items-center gap-1.5 border-2 border-slate bg-slate px-3 font-bold text-white hover:bg-slate-2" aria-label="יציאה">
+                <LogOut className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">יציאה</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <nav className="bg-slate" aria-label="ניווט באזור האישי">
+          <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 md:px-6">
             {admin ? (<>
               <NavItem to="/admin" end>הזמנות</NavItem>
               <NavItem to="/admin/clients">לקוחות</NavItem>
@@ -31,14 +42,8 @@ export function AppShell({ admin = false, children, title }: { admin?: boolean; 
               <NavItem to="/portal/settings">הסטנדרט שלי</NavItem>
               {me.role === "admin" && <NavItem to="/admin">ניהול</NavItem>}
             </>)}
-          </nav>
-          <div className="flex items-center gap-3 text-sm text-white/80">
-            <span className="hidden sm:inline">{me.company_name || me.full_name}</span>
-            <button onClick={async () => { await api.signOut(); nav("/"); }} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-white/10" aria-label="יציאה">
-              <LogOut className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">יציאה</span>
-            </button>
           </div>
-        </div>
+        </nav>
       </header>
       {api.demo && <div className="bg-warn/15 px-5 py-1.5 text-center text-sm">מצב הדגמה: הנתונים נשמרים רק בדפדפן הזה.</div>}
       <main id="main" className="mx-auto max-w-7xl px-5 py-8">{children}</main>

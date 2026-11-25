@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
-import { Logo } from "@/components/Site";
+import { SiteHeader } from "@/components/Site";
 import SheetArt from "@/components/SheetArt";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
@@ -33,10 +33,10 @@ export default function Login() {
   };
 
   return (
-    <main id="main" className="grid min-h-screen md:grid-cols-2">
+    <><SiteHeader />
+    <main id="main" className="grid min-h-[calc(100vh-200px)] md:grid-cols-2">
       <div className="flex flex-col justify-center px-6 py-12 md:px-16">
-        <Logo />
-        <h1 className="mt-10 text-4xl">כניסה לאזור הלקוחות</h1>
+        <h1 className="font-display text-6xl">כניסה לאזור הלקוחות</h1>
         <p className="mt-3 max-w-sm text-steel">לקוח חדש? הכניסה הראשונה פותחת לך חשבון. אין סיסמה לזכור.</p>
         <div className="mt-8 grid max-w-sm gap-3">
           <button className="btn-ghost justify-center py-3 text-lg" disabled={busy}
@@ -68,6 +68,6 @@ export default function Login() {
       <div className="hidden items-center bg-slate p-14 md:flex">
         <div className="w-full rounded-2xl bg-slate-2 p-6"><SheetArt /></div>
       </div>
-    </main>
+    </main></>
   );
 }
