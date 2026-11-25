@@ -37,6 +37,7 @@ export default function OrderPage({ admin = false }: { admin?: boolean }) {
       <p className="mb-2 text-sm"><Link to={base} className="text-info underline">{isAdmin ? "כל ההזמנות" : "ההזמנות שלי"}</Link></p>
       <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="text-3xl"><span className="num text-steel">#{o.order_no}</span> {o.project_name}</h1>
+        {o.is_sample && <p className="mt-2 max-w-2xl border-r-4 border-cut bg-white p-3">זו תוכנית לדוגמה. פתחו את מרכז העבודה ונסו: לחיצה על חלק בפלטה מדפיסה מדבקה, וחיפוש לפי מספר חלק מראה אותו גם בשרטוט הבנייה.</p>}
         <StatusBadge status={o.status} admin={isAdmin} />
         {isAdmin && o.client && <Link to={`/admin/clients/${o.user_id}`} className="text-info underline">{o.client.company_name || o.client.full_name}</Link>}
         <span className="mr-auto text-sm text-steel">נפתחה {fmtDate(o.created_at)}</span>

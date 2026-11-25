@@ -45,6 +45,8 @@ export interface Order {
   frozen_at: string | null;
   /** hidden from the admin lists (e.g. old test orders) */
   hidden?: boolean;
+  /** the shared sample program every client gets (never billed, not in admin lists) */
+  is_sample?: boolean;
   created_at: string;
   updated_at: string;
   client?: Pick<Profile, "id" | "full_name" | "company_name" | "email" | "phone" | "drive_folder">;

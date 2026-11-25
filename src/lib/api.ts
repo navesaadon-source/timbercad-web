@@ -88,6 +88,7 @@ function supabaseApi(sb: SupabaseClient): Api {
     async orders(opts) {
       let q = sb.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false });
       if (!opts?.all) { const s = await this.session(); if (s) q = q.eq("user_id", s.userId); }
+      else q = q.eq("is_sample", false);           // admin lists never show the clients' sample programs
       return ok(await q) as Order[];
     },
     async order(id) { return ok(await sb.from("orders").select(ORDER_SELECT).eq("id", id).maybeSingle()) as Order | null; },

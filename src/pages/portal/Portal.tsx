@@ -19,7 +19,9 @@ export function MyOrders() {
     try { first = !sessionStorage.getItem("tc-admin-landed"); sessionStorage.setItem("tc-admin-landed", "1"); } catch { /* ignore */ }
     if (me?.role === "admin" && first) nav("/admin", { replace: true });
   }, [me, nav]);
-  const { data: orders, error } = useAsync(() => api.orders(), [me?.id]);
+  const { data: all, error } = useAsync(() => api.orders(), [me?.id]);
+  const orders = all?.filter((o) => !o.is_sample);
+  const sample = all?.find((o) => o.is_sample);
   const active = orders?.filter((o) => !["billed", "cancelled"].includes(o.status)) ?? [];
   const past = orders?.filter((o) => ["billed", "cancelled"].includes(o.status)) ?? [];
   return (
@@ -41,6 +43,13 @@ export function MyOrders() {
       )}
       {active.length > 0 && <OrderList orders={active} />}
       {past.length > 0 && (<><h2 className="mb-3 mt-10 text-2xl">הזמנות קודמות</h2><OrderList orders={past} /></>)}
+      {sample && (
+        <Link to={`/portal/order/${sample.id}`} className="mt-10 flex flex-wrap items-center gap-4 border-2 border-dashed border-cut-ink/60 bg-white p-5 hover:bg-sheet">
+          <span className="grid h-12 w-12 flex-none place-items-center bg-slate font-display text-2xl text-white" aria-hidden>?</span>
+          <span className="min-w-60 flex-1"><b className="text-lg">תוכנית לדוגמה</b><br /><span className="text-steel">ככה נראה מרכז העבודה שתקבלו לכל הזמנה: פריסת פלטות, מדבקות, דוחות בנייה וקבצי מכונה.</span></span>
+          <span className="btn-cut">לפתיחת הדוגמה</span>
+        </Link>
+      )}
     </AppShell>
   );
 }
