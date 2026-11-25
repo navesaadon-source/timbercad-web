@@ -59,7 +59,6 @@ export default function Home() {
                 <span className="num font-display text-4xl text-cut-ink">0{i + 1}</span>
                 <h3 className="text-xl">{x.t}</h3>
                 <p className="leading-relaxed text-steel">{x.d}</p>
-                <span className="mt-1 text-sm font-bold text-cut-ink">דוגמה מעבודה אמיתית ↑</span>
                 <figure className="pointer-events-none absolute bottom-[calc(100%-12px)] right-4 z-20 w-60 translate-y-2 border-2 border-slate bg-white p-1.5 opacity-0 shadow-[0_18px_40px_-12px_rgba(31,43,51,.45)] transition duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus:translate-y-0 group-focus:opacity-100">
                   <img src={x.img} alt={x.alt} className="aspect-[3/2] w-full object-contain" loading="lazy" />
                 </figure>
