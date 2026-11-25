@@ -70,3 +70,16 @@ export interface CatalogItem {
   sort: number;
   active: boolean;
 }
+
+/** admin-only billing data */
+export interface BillingRate {
+  user_id: string;
+  min_price: number | null; min_sheets: number | null; per_sheet: number | null;
+  hourly_rate: number | null; retainer_price: number | null; retainer_hours: number | null;
+  notes: string;
+}
+export interface OrderBilling { order_id: string; amount: number | null; note: string; invoice_no: string; billed_at: string | null }
+export interface WorkHour {
+  id: string; user_id: string; order_id: string | null; work_date: string; hours: number;
+  description: string; billed_at: string | null; created_at: string;
+}

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Attachment, CatalogItem, Order, OrderEvent, OrderStatus, Profile } from "./types";
+import type { Attachment, BillingRate, CatalogItem, Order, OrderBilling, OrderEvent, OrderStatus, Profile, WorkHour } from "./types";
 import type { LegacyClient, LegacyOrder } from "./legacy";
 import { SEED } from "./catalog-seed";
 import { ADMIN_EMAILS } from "@/config";
@@ -42,6 +42,14 @@ export interface Api {
   createClient(c: NewClient): Promise<{ id: string; created: boolean }>;
   setEmail(id: string, email: string): Promise<void>;
   deleteClient(id: string): Promise<void>;
+  // billing (admin only)
+  rates(): Promise<BillingRate[]>;
+  saveRate(r: BillingRate): Promise<void>;
+  orderBilling(): Promise<OrderBilling[]>;
+  saveOrderBilling(b: Partial<OrderBilling> & { order_id: string }): Promise<void>;
+  hours(from: string, to: string): Promise<WorkHour[]>;
+  saveHours(h: Partial<WorkHour> & { user_id: string; hours: number }): Promise<void>;
+  deleteHours(id: string): Promise<void>;
   importLegacy(clients: LegacyClient[], orders: LegacyOrder[]): Promise<ImportResult>;
   watcher(): Promise<WatcherInfo | null>;
 }
@@ -105,6 +113,13 @@ function supabaseApi(sb: SupabaseClient): Api {
     async createClient(c) { return adminFn(sb, { action: "create_client", client: c }); },
     async setEmail(id, email) { await adminFn(sb, { action: "set_email", id, email }); },
     async deleteClient(id) { await adminFn(sb, { action: "delete_client", id }); },
+    async rates() { return ok(await sb.from("billing_rates").select("*")) as BillingRate[]; },
+    async saveRate(r) { ok(await sb.from("billing_rates").upsert({ ...r, updated_at: new Date().toISOString() })); },
+    async orderBilling() { return ok(await sb.from("order_billing").select("*")) as OrderBilling[]; },
+    async saveOrderBilling(b) { ok(await sb.from("order_billing").upsert(b)); },
+    async hours(from, to) { return ok(await sb.from("work_hours").select("*").gte("work_date", from).lt("work_date", to).order("work_date")) as WorkHour[]; },
+    async saveHours(h) { ok(await sb.from("work_hours").upsert(h)); },
+    async deleteHours(id) { ok(await sb.from("work_hours").delete().eq("id", id)); },
     async importLegacy(clients, orders) { return adminFn(sb, { action: "import", clients, orders }); },
     async watcher() {
       const r = ok(await sb.from("settings").select("value").eq("key", "watcher").maybeSingle()) as { value: string } | null;
@@ -128,7 +143,8 @@ async function adminFn<T>(sb: SupabaseClient, body: object): Promise<T> {
 // ───────────────────────── Demo (browser only) ─────────────────────────
 function demoApi(): Api {
   const KEY = "tc-demo-v2";
-  type DB = { user: string | null; profiles: Profile[]; orders: Order[]; events: OrderEvent[]; catalog: CatalogItem[]; files: Record<string, string> };
+  type DB = { user: string | null; profiles: Profile[]; orders: Order[]; events: OrderEvent[]; catalog: CatalogItem[]; files: Record<string, string>;
+    rates?: BillingRate[]; billing?: OrderBilling[]; hours?: WorkHour[] };
   const uid = () => crypto.randomUUID();
   const now = () => new Date().toISOString();
   const ago = (d: number) => new Date(Date.now() - d * 864e5).toISOString();
@@ -170,7 +186,14 @@ function demoApi(): Api {
       return ev;
     });
     const catalog: CatalogItem[] = SEED.map(([category, key, label, parent], i) => ({ id: uid(), category, key, label, parent: parent ?? null, sort: i, active: true }));
-    return { user: null, profiles: [admin, c1, c2], orders, events, catalog, files: {} };
+    const rates: BillingRate[] = [
+      { user_id: c1.id, min_price: 450, min_sheets: 10, per_sheet: 35, hourly_rate: 220, retainer_price: null, retainer_hours: null, notes: "" },
+      { user_id: c2.id, min_price: 380, min_sheets: 8, per_sheet: 30, hourly_rate: 200, retainer_price: 2400, retainer_hours: 12, notes: "ריטיינר חודשי" },
+    ];
+    const d = (n: number) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+    const hours: WorkHour[] = [[c2.id, 9, 3.5, "הקמת ספריית פרזול"], [c2.id, 6, 4, "יחידות מטבח חדשות"], [c2.id, 2, 2.5, "תמיכה בפוסט-פרוססור"], [c1.id, 4, 1.5, "הדרכת עובד חדש"]]
+      .map(([u, ago, h, t]) => ({ id: uid(), user_id: u as string, order_id: null, work_date: d(ago as number), hours: h as number, description: t as string, billed_at: null, created_at: now() }));
+    return { user: null, profiles: [admin, c1, c2], orders, events, catalog, files: {}, rates, hours, billing: [] };
   }
   const load = (): DB => { try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch { /* storage unavailable */ } return seed(); };
   let db = load();
@@ -257,6 +280,19 @@ function demoApi(): Api {
       db.profiles.push({ id, role: "client", defaults: blankHw(), notes: "", created_at: now(), ...c, email: c.email.toLowerCase() });
       save(); return { id, created: true };
     },
+    async rates() { return delay(db.rates ?? []); },
+    async saveRate(r) { db.rates = [...(db.rates ?? []).filter((x) => x.user_id !== r.user_id), r]; save(); },
+    async orderBilling() { return delay(db.billing ?? []); },
+    async saveOrderBilling(b) {
+      const cur = (db.billing ?? []).find((x) => x.order_id === b.order_id) ?? { order_id: b.order_id, amount: null, note: "", invoice_no: "", billed_at: null };
+      db.billing = [...(db.billing ?? []).filter((x) => x.order_id !== b.order_id), { ...cur, ...b }]; save();
+    },
+    async hours(from, to) { return delay((db.hours ?? []).filter((h) => h.work_date >= from && h.work_date < to).sort((a, b) => a.work_date.localeCompare(b.work_date))); },
+    async saveHours(h) {
+      const row = { id: h.id ?? uid(), order_id: null, work_date: now().slice(0, 10), description: "", billed_at: null, created_at: now(), ...h } as WorkHour;
+      db.hours = [...(db.hours ?? []).filter((x) => x.id !== row.id), row]; save();
+    },
+    async deleteHours(id) { db.hours = (db.hours ?? []).filter((x) => x.id !== id); save(); },
     async deleteClient(id) {
       const gone = new Set(db.orders.filter((o) => o.user_id === id).map((o) => o.id));
       db.profiles = db.profiles.filter((p) => p.id !== id); db.orders = db.orders.filter((o) => !gone.has(o.id));

@@ -12,6 +12,7 @@ import { MyOrders, NewOrder, MySettings } from "@/pages/portal/Portal";
 import OrderPage from "@/pages/OrderPage";
 import { AdminOrders, AdminNewOrder, AdminClients, AdminClient, AdminCatalog } from "@/pages/admin/Admin";
 import { AdminImport } from "./pages/admin/Import";
+import { AdminBilling } from "./pages/admin/Billing";
 import { PublicPage } from "@/components/Site";
 
 function ScrollTop() {
@@ -42,6 +43,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/admin/clients/:id" element={<AdminClient />} />
           <Route path="/admin/catalog" element={<AdminCatalog />} />
           <Route path="/admin/import" element={<AdminImport />} />
+          <Route path="/admin/billing" element={<AdminBilling />} />
           <Route path="*" element={<PublicPage><div className="mx-auto max-w-xl px-5 py-24 text-center"><h1 className="text-4xl">העמוד לא נמצא</h1><a href="#/" className="btn-primary mt-6">לדף הבית</a></div></PublicPage>} />
         </Routes>
         <A11yMenu />

@@ -11,18 +11,20 @@ const TITLES: Record<string, string> = {
   order_unfrozen: "▶ לקוח ביקש להמשיך הזמנה",
   order_created: "🆕 הזמנה חדשה",
   retainer_exhausted: "⌛ נגמרו שעות הריטיינר",
+  retainer_low: "⏳ נוצלו 80% משעות הריטיינר",
 };
 
 Deno.serve(async (req) => {
   if (req.headers.get("x-notify-secret") !== env("NOTIFY_SECRET")) return new Response("forbidden", { status: 403 });
-  const { type, order = {}, client = {} } = await req.json();
+  const { type, order = {}, client = {}, note = "" } = await req.json();
   const title = TITLES[type] ?? type;
   const who = client.company_name || client.full_name || client.email || "לקוח";
-  const link = env("SITE_URL") ? `${env("SITE_URL")}/#/admin/order/${order.id}` : "";
+  const link = !env("SITE_URL") ? "" : order.id ? `${env("SITE_URL")}/#/admin/order/${order.id}` : `${env("SITE_URL")}/#/admin/billing`;
   const lines = [
     title,
     `לקוח: ${who}`,
     order.order_no ? `הזמנה #${order.order_no}: ${order.project_name ?? ""}` : "",
+    note,
     client.phone ? `טלפון: ${client.phone}` : "",
     link,
   ].filter(Boolean);

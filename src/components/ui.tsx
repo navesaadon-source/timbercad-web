@@ -34,6 +34,7 @@ export function AppShell({ admin = false, children, title }: { admin?: boolean; 
             {admin ? (<>
               <NavItem to="/admin" end>הזמנות</NavItem>
               <NavItem to="/admin/clients">לקוחות</NavItem>
+              <NavItem to="/admin/billing">חיוב</NavItem>
               <NavItem to="/admin/catalog">קטלוג</NavItem>
               <NavItem to="/portal" end>תצוגת לקוח</NavItem>
             </>) : (<>
