@@ -33,7 +33,7 @@ export default function Home() {
       <section className="relative overflow-hidden bg-white">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-14 pt-12 md:grid-cols-[1fr_1.15fr] md:pt-20">
           <div>
-            <h1 className="text-[2.6rem] leading-[1.1] md:text-[3.6rem]">מהתוכנית<br />ועד הפלטה החתוכה</h1>
+            <h1 className="text-[2.6rem] leading-[1.1] md:text-[3.6rem]">מהשרטוט<br />ישר למכונה</h1>
             <p className="mt-5 max-w-md text-lg leading-relaxed text-steel">
               ב-TimberCad אנחנו מתכננים לנגריות את כל מה שבין התוכנית למכונה: פריסת פלטות, קבצי CNC, מדבקות ודוחות בנייה.
               את הכל מקבלים במקום אחד, לכל הזמנה.
@@ -58,7 +58,8 @@ export default function Home() {
       {/* services */}
       <section id="services" className="scroll-mt-20 border-t border-line">
         <div className="mx-auto max-w-6xl px-5 py-16">
-          <h2 className="max-w-xl text-3xl md:text-4xl">כל מה שהנגרייה צריכה כדי שהמכונה תתחיל לחתוך</h2>
+          <h2 className="max-w-xl text-3xl md:text-4xl">המחלקה הטכנית של הנגרייה שלכם</h2>
+          <p className="mt-3 max-w-xl text-lg text-steel">אתם מייצרים, אנחנו מתכננים: הנדסה, פריסות, קבצים ותמיכה, בלי להחזיק מתכנן במשרה מלאה.</p>
           <ul className="mt-10 grid gap-x-12 md:grid-cols-2">
             {SERVICES.map(({ icon: I, t, d }) => (
               <li key={t} className="flex gap-4 border-b border-line py-5">
