@@ -14,7 +14,7 @@ export function Logo({ light = false }: { light?: boolean }) {
   );
 }
 
-const LINKS: [string, string][] = [["/#services", "שירותים"], ["/#process", "איך זה עובד"], ["/#pricing", "מסלולי עבודה"], ["/#contact", "צור קשר"]];
+const LINKS: [string, string][] = [["/#services", "שירותים"], ["/#process", "איך זה עובד"], ["/#contact", "צור קשר"]];
 
 export function SiteHeader() {
   const { me } = useApp();
@@ -67,7 +67,7 @@ export function SiteFooter() {
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <Logo light />
-          <p className="mt-4 max-w-sm leading-relaxed">{BUSINESS.owner} – תכנון CAD/CAM לנגריות. מתוכנית אדריכלית ועד קבצים, מדבקות ודוחות שמוכנים לרצפת הייצור.</p>
+          <p className="mt-4 max-w-sm leading-relaxed">TimberCad – תכנון CAD/CAM לנגריות. מתוכנית אדריכלית ועד קבצים, מדבקות ודוחות שמוכנים לרצפת הייצור.</p>
         </div>
         <div>
           <h2 className="mb-3 text-lg text-white">יצירת קשר</h2>
@@ -83,7 +83,7 @@ export function SiteFooter() {
           </ul>
         </div>
       </div>
-      <div className="border-t border-white/10 py-4 text-center text-sm">© {new Date().getFullYear()} {BUSINESS.name}, {BUSINESS.owner}</div>
+      <div className="border-t border-white/10 py-4 text-center text-sm">© {new Date().getFullYear()} {BUSINESS.name}</div>
     </footer>
   );
 }

@@ -25,12 +25,6 @@ const STEPS = [
   ["מקבלים מרכז עבודה", "פריסת פלטות, מדבקות להדפסה, דוחות בנייה, פרזול וקבצי מכונה, הכל בעמוד אחד להזמנה."],
 ];
 
-const PLANS = [
-  { t: "לפי הזמנה", d: "מחיר לפי מספר הלוחות בהזמנה, עם מחיר מינימום. מתאים לנגריות שמזמינות מדי פעם.", list: ["מחיר בסיס עד מספר לוחות קבוע", "תוספת לכל לוח מעבר לבסיס", "סיכום לוחות לכל הזמנה באזור האישי"] },
-  { t: "שעות עבודה", d: "תכנון, ליווי או פתרון תקלות שמתומחרים לפי שעה.", list: ["תיעוד שעות לכל משימה", "חשבון חודשי מסודר"] },
-  { t: "ריטיינר חודשי", d: "בנק שעות קבוע בכל חודש למי שעובד איתנו באופן שוטף.", list: ["מספר שעות קבוע בחודש", "מעקב אחרי יתרת השעות", "עדיפות בתור העבודה"] },
-];
-
 export default function Home() {
   const s = sheet as { L: number; W: number; mat: string; T: number; parts: unknown[] };
   return (
@@ -41,7 +35,7 @@ export default function Home() {
           <div>
             <h1 className="text-[2.6rem] leading-[1.1] md:text-[3.6rem]">מהתוכנית<br />ועד הפלטה החתוכה</h1>
             <p className="mt-5 max-w-md text-lg leading-relaxed text-steel">
-              {BUSINESS.owner} מתכנן לנגריות את כל מה שבין התוכנית למכונה: פריסת פלטות, קבצי CNC, מדבקות ודוחות בנייה.
+              ב-TimberCad אנחנו מתכננים לנגריות את כל מה שבין התוכנית למכונה: פריסת פלטות, קבצי CNC, מדבקות ודוחות בנייה.
               את הכל מקבלים במקום אחד, לכל הזמנה.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -50,7 +44,6 @@ export default function Home() {
             </div>
             <dl className="mt-10 flex gap-8 text-sm text-steel">
               <div><dt>שנות ניסיון</dt><dd className="num font-display text-3xl text-slate">{BUSINESS.years}+</dd></div>
-              <div><dt>נגריות שעבדו איתנו</dt><dd className="num font-display text-3xl text-slate">200+</dd></div>
             </dl>
           </div>
           <figure>
@@ -111,25 +104,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* pricing models */}
-      <section id="pricing" className="scroll-mt-20">
-        <div className="mx-auto max-w-6xl px-5 py-16">
-          <h2 className="text-3xl md:text-4xl">מסלולי עבודה</h2>
-          <p className="mt-3 max-w-xl text-steel">כל לקוח מקבל הצעת מחיר אישית. אלה שלושת המסלולים שעליהם היא נבנית.</p>
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            {PLANS.map((p) => (
-              <div key={p.t} className="panel p-6">
-                <h3 className="text-2xl">{p.t}</h3>
-                <p className="mt-2 leading-relaxed text-steel">{p.d}</p>
-                <ul className="mt-5 space-y-2 border-t border-line pt-4">
-                  {p.list.map((l) => <li key={l} className="flex gap-2"><Check className="mt-1 h-4 w-4 flex-none text-cut-ink" aria-hidden />{l}</li>)}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <Contact />
     </PublicPage>
   );
@@ -147,7 +121,7 @@ function Contact() {
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-2">
         <div>
           <h2 className="text-3xl md:text-4xl">נדבר על הנגרייה שלך</h2>
-          <p className="mt-4 max-w-md leading-relaxed text-steel">ספר לנו איזו מכונה יש לך ומה אתם מייצרים. נחזור אליך לשיחת היכרות קצרה ונציע את מסלול העבודה המתאים.</p>
+          <p className="mt-4 max-w-md leading-relaxed text-steel">ספר לנו איזו מכונה יש לך ומה אתם מייצרים. נחזור אליך לשיחת היכרות קצרה ונבנה יחד את דרך העבודה שמתאימה לכם.</p>
           <ContactLinks className="mt-6 text-lg" />
         </div>
         <form onSubmit={send} className="panel grid gap-4 p-6">
