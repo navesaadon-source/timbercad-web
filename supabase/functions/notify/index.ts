@@ -12,19 +12,24 @@ const TITLES: Record<string, string> = {
   order_created: "🆕 הזמנה חדשה",
   retainer_exhausted: "⌛ נגמרו שעות הריטיינר",
   retainer_low: "⏳ נוצלו 80% משעות הריטיינר",
+  signup_request: "🙋 בקשת הרשמה חדשה",
 };
 
 Deno.serve(async (req) => {
   if (req.headers.get("x-notify-secret") !== env("NOTIFY_SECRET")) return new Response("forbidden", { status: 403 });
   const { type, order = {}, client = {}, note = "" } = await req.json();
+  if (type === "signup_approved") return Response.json({ ok: true, results: { email: await approved(client) } });
   const title = TITLES[type] ?? type;
   const who = client.company_name || client.full_name || client.email || "לקוח";
-  const link = !env("SITE_URL") ? "" : order.id ? `${env("SITE_URL")}/#/admin/order/${order.id}` : `${env("SITE_URL")}/#/admin/billing`;
+  const link = !env("SITE_URL") ? "" : order.id ? `${env("SITE_URL")}/#/admin/order/${order.id}`
+    : type === "signup_request" ? `${env("SITE_URL")}/#/admin/clients` : `${env("SITE_URL")}/#/admin/billing`;
   const lines = [
     title,
     `לקוח: ${who}`,
     order.order_no ? `הזמנה #${order.order_no}: ${order.project_name ?? ""}` : "",
     note,
+    type === "signup_request" && client.full_name ? `איש קשר: ${client.full_name}` : "",
+    type === "signup_request" && client.email ? `מייל: ${client.email}` : "",
     client.phone ? `טלפון: ${client.phone}` : "",
     link,
   ].filter(Boolean);
@@ -44,7 +49,7 @@ Deno.serve(async (req) => {
     const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px">
       <h2 style="margin:0 0 10px">${title}</h2>
       ${lines.slice(1, -1).map((l) => `<div>${l}</div>`).join("")}
-      ${link ? `<p><a href="${link}">פתיחת ההזמנה במערכת</a></p>` : ""}</div>`;
+      ${link ? `<p><a href="${link}">${type === "signup_request" ? "לאישור הבקשה במערכת" : "פתיחת ההזמנה במערכת"}</a></p>` : ""}</div>`;
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env("RESEND_API_KEY")}`, "Content-Type": "application/json" },
@@ -60,3 +65,19 @@ Deno.serve(async (req) => {
 
   return Response.json({ ok: true, results });
 });
+
+/** tells the client that the account is open (needs a verified sending domain in Resend) */
+async function approved(client: Record<string, string>) {
+  if (!env("RESEND_API_KEY") || !client.email) return "skipped";
+  const link = env("SITE_URL") ? `${env("SITE_URL")}/#/login` : "";
+  const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px">
+    <h2 style="margin:0 0 10px">שלום ${client.full_name || ""}, החשבון שלכם ב-TimberCad אושר</h2>
+    <p>אפשר להיכנס לאזור הלקוחות, לפתוח הזמנות ולראות את התוכנית לדוגמה.</p>
+    ${link ? `<p><a href="${link}">כניסה לאזור הלקוחות</a></p>` : ""}</div>`;
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env("RESEND_API_KEY")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: env("RESEND_FROM") || "TimberCad <onboarding@resend.dev>", to: [client.email], subject: "החשבון שלכם ב-TimberCad אושר", html }),
+  });
+  return r.status;
+}

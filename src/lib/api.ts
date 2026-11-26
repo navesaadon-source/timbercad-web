@@ -218,8 +218,9 @@ function demoApi(): Api {
       if (p) db.user = p.id;
       else {
         const id = uid();
-        db.profiles.push({ id, email, full_name: email.split("@")[0], company_name: "", phone: "", role: ADMIN_EMAILS.includes(email) ? "admin" : "client",
-          defaults: blankHw(), notes: "", drive_folder: "", created_at: now() });
+        const isAdmin = ADMIN_EMAILS.includes(email);
+        db.profiles.push({ id, email, full_name: "", company_name: "", phone: "", role: isAdmin ? "admin" : "client",
+          status: isAdmin ? "approved" : "pending", requested_at: null, defaults: blankHw(), notes: "", drive_folder: "", created_at: now() });
         db.user = id;
       }
       save(); fire();

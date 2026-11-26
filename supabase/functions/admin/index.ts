@@ -50,6 +50,7 @@ async function ensureClient(c: ClientIn) {
   const emptyDefaults = !d.connection_method && !Object.keys(d.hinge ?? {}).length && !Object.keys(d.drawer ?? {}).length;
   if (c.defaults && emptyDefaults) patch.defaults = c.defaults;
   if (c.auto_folders === false && p.auto_folders !== false) patch.auto_folders = false;
+  if (p.status && p.status !== "approved") patch.status = "approved";   // clients the admin adds are approved
   if (Object.keys(patch).length) {
     const { error } = await sb.from("profiles").update(patch).eq("id", p.id);
     if (error) throw error;

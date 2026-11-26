@@ -22,6 +22,10 @@ export interface Profile {
   drive_folder: string;
   /** false = service client: the PC does not open job folders for its orders */
   auto_folders?: boolean;        // customer folder name under the Drive root (e.g. COSMEC)
+  /** new sign-ups wait for the admin's approval */
+  status?: "pending" | "approved" | "rejected";
+  /** set when the client sent the sign-up form */
+  requested_at?: string | null;
   created_at: string;
 }
 

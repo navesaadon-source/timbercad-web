@@ -37,7 +37,7 @@ export default function Login() {
     <main id="main" className="grid min-h-[calc(100vh-200px)] md:grid-cols-2">
       <div className="flex flex-col justify-center px-6 py-12 md:px-16">
         <h1 className="font-display text-6xl">כניסה לאזור הלקוחות</h1>
-        <p className="mt-3 max-w-sm text-steel">לקוח חדש? הכניסה הראשונה פותחת לך חשבון. אין סיסמה לזכור.</p>
+        <p className="mt-3 max-w-sm text-steel">אין סיסמה לזכור. לקוח חדש? נכנסים עם גוגל או עם המייל, ממלאים שם ושם עסק, ואנחנו מאשרים את החשבון.</p>
         <div className="mt-8 grid max-w-sm gap-3">
           <button className="btn-ghost justify-center py-3 text-lg" disabled={busy}
             onClick={() => run(() => api.signInGoogle(), () => api.demo && nav("/portal"))}>

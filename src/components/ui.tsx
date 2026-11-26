@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { NavItem } from "./Site";
 import { useApp } from "@/lib/store";
 import { api } from "@/lib/api";
+import Registration from "./Registration";
 import { STATUS, FLOW, flowIndex } from "@/lib/status";
 import type { OrderStatus } from "@/lib/types";
 
@@ -15,6 +16,7 @@ export function AppShell({ admin = false, children, title }: { admin?: boolean; 
   if (loading) return <div className="grid min-h-screen place-items-center text-steel" role="status">טוען…</div>;
   if (!me) return <Navigate to="/login" replace />;
   if (admin && me.role !== "admin") return <Navigate to="/portal" replace />;
+  const pending = me.role !== "admin" && (me.status ?? "approved") !== "approved";
   return (
     <div className="min-h-screen">
       <header>
@@ -22,7 +24,7 @@ export function AppShell({ admin = false, children, title }: { admin?: boolean; 
           <Link to="/" className="absolute inset-y-0 left-1/2 w-[46%] max-w-[300px] -translate-x-1/2" aria-label="TimberCad – דף הבית" />
           <div className="mx-auto flex h-full max-w-7xl items-center justify-end px-4 md:px-8">
             <div className="flex items-center gap-2 text-sm">
-              <span className="hidden border-2 border-slate bg-white px-3 py-2 font-bold sm:inline">{me.company_name || me.full_name}</span>
+              <span className="hidden border-2 border-slate bg-white px-3 py-2 font-bold sm:inline">{me.company_name || me.full_name || me.email}</span>
               <button onClick={async () => { await api.signOut(); nav("/"); }} className="inline-flex h-11 items-center gap-1.5 border-2 border-slate bg-slate px-3 font-bold text-white hover:bg-slate-2" aria-label="יציאה">
                 <LogOut className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">יציאה</span>
               </button>
@@ -31,7 +33,7 @@ export function AppShell({ admin = false, children, title }: { admin?: boolean; 
         </div>
         <nav className="bg-slate" aria-label="ניווט באזור האישי">
           <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 md:px-6">
-            {admin ? (<>
+            {pending ? <span className="px-3 py-3 font-bold text-white/80">הרשמה</span> : admin ? (<>
               <NavItem to="/admin" end>הזמנות</NavItem>
               <NavItem to="/admin/clients">לקוחות</NavItem>
               <NavItem to="/admin/billing">חיוב</NavItem>
@@ -47,7 +49,7 @@ export function AppShell({ admin = false, children, title }: { admin?: boolean; 
         </nav>
       </header>
       {api.demo && <div className="bg-warn/15 px-5 py-1.5 text-center text-sm">מצב הדגמה: הנתונים נשמרים רק בדפדפן הזה.</div>}
-      <main id="main" className="mx-auto max-w-7xl px-5 py-8">{children}</main>
+      <main id="main" className="mx-auto max-w-7xl px-5 py-8">{pending ? <Registration /> : children}</main>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Pause, Play, Pencil, ExternalLink, FileText, Trash2, LayoutGrid } from "lucide-react";
+import { Pause, Play, Pencil, ExternalLink, FileText, Trash2, LayoutGrid, AlertTriangle } from "lucide-react";
 import { AppShell, StatusBadge, StatusLine, fmtDate, fmtDateTime } from "@/components/ui";
 import { SpecSummary } from "@/components/SpecForms";
 import { OrderEditor, type Draft } from "@/components/OrderEditor";
@@ -38,6 +38,9 @@ export default function OrderPage({ admin = false }: { admin?: boolean }) {
       <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="text-3xl"><span className="num text-steel">#{o.order_no}</span> {o.project_name}</h1>
         {o.is_sample && <p className="mt-2 max-w-2xl border-r-4 border-cut bg-white p-3">זו תוכנית לדוגמה. פתחו את מרכז העבודה ונסו: לחיצה על חלק בפלטה מדפיסה מדבקה, וחיפוש לפי מספר חלק מראה אותו גם בשרטוט הבנייה.</p>}
+        {o.is_sample && <p role="alert" className="mt-2 flex max-w-2xl items-start gap-2 border-r-4 border-red-700 bg-red-50 p-3 font-semibold text-red-800">
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-none" aria-hidden />
+          קבצי המכונה (NC) בתוכנית הזו הוכנו למכונה אחרת ואינם מתאימים למכונה שלכם. אין להריץ אותם: הרצה עלולה לגרום נזק למכונה, לכלים ולחומר.</p>}
         <StatusBadge status={o.status} admin={isAdmin} />
         {isAdmin && o.client && <Link to={`/admin/clients/${o.user_id}`} className="text-info underline">{o.client.company_name || o.client.full_name}</Link>}
         <span className="mr-auto text-sm text-steel">נפתחה {fmtDate(o.created_at)}</span>

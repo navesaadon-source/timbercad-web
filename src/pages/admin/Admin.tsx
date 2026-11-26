@@ -110,6 +110,18 @@ function BulkStatusBar({ ids, onDone, onClear, manage }: { ids: string[]; onDone
   );
 }
 
+function SignupBanner() {
+  const { data: clients } = useAsync(() => api.clients(), []);
+  const n = (clients ?? []).filter((c) => c.role !== "admin" && c.status === "pending" && c.requested_at).length;
+  if (!n) return null;
+  return (
+    <Link to="/admin/clients" className="mb-5 flex items-center gap-3 border-2 border-cut bg-cut/10 px-4 py-3 font-semibold hover:bg-cut/20">
+      <span className="grid h-8 w-8 place-items-center bg-cut-ink text-white">{n}</span>
+      {n === 1 ? "בקשת הרשמה אחת ממתינה לאישור" : `${n} בקשות הרשמה ממתינות לאישור`}
+    </Link>
+  );
+}
+
 export function AdminOrders() {
   const { data: orders, reload, error } = useAsync(() => api.orders({ all: true }), []);
   const [tab, setTab] = useState("open");
@@ -181,6 +193,7 @@ export function AdminOrders() {
 
   return (
     <AppShell admin title="ניהול הזמנות">
+      <SignupBanner />
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <h1 className="flex-1 text-3xl">הזמנות</h1>
         <button className="btn-ghost" onClick={exportXlsx} disabled={!list.length}><Download className="h-4 w-4" aria-hidden />ייצוא לאקסל</button>
@@ -314,7 +327,16 @@ export function AdminClients() {
   const [adding, setAdding] = useState(false);
   const { data: orders } = useAsync(() => api.orders({ all: true }), []);
   const [q, setQ] = useState("");
-  const list = (clients ?? []).filter((c) => !q || `${c.company_name} ${c.full_name} ${c.email} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
+  const requests = (clients ?? []).filter((c) => c.role !== "admin" && c.status === "pending")
+    .sort((a, b) => (b.requested_at ?? "").localeCompare(a.requested_at ?? ""));
+  const list = (clients ?? []).filter((c) => c.status !== "pending")
+    .filter((c) => !q || `${c.company_name} ${c.full_name} ${c.email} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
+  const decide = async (c: Profile, status: "approved" | "rejected") => {
+    if (status === "rejected" && !confirm(`לדחות את הבקשה של ${c.company_name || c.email}?`)) return;
+    setErr("");
+    try { await api.updateProfile(c.id, { status, ...(status === "approved" && !c.company_name ? { company_name: c.full_name } : {}) }); reload(); }
+    catch (e) { setErr((e as Error).message); }
+  };
   const stats = (id: string) => {
     const os = orders?.filter((o) => o.user_id === id) ?? [];
     return { total: os.length, open: os.filter((o) => ["submitted", "production", "frozen"].includes(o.status)).length };
@@ -327,12 +349,31 @@ export function AdminClients() {
         <button className="btn-cut" onClick={() => setAdding(true)}><Plus className="h-4 w-4" aria-hidden />לקוח חדש</button></div>
       {adding && <NewClientForm onClose={() => setAdding(false)} />}
       {err && <p role="alert" className="mb-3 text-red-700">{err}</p>}
+      {requests.length > 0 && (
+        <section className="mb-6 border-2 border-cut bg-white" aria-labelledby="req-h">
+          <h2 id="req-h" className="border-b border-line bg-cut/10 px-4 py-2 text-xl">בקשות הרשמה ממתינות ({requests.length})</h2>
+          <ul className="divide-y divide-line">{requests.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+              <span className="min-w-48 flex-1">
+                <b>{c.company_name || <span className="text-steel">עוד לא מילא פרטים</span>}</b>
+                {c.full_name && <> · {c.full_name}</>}<br />
+                <span className="text-sm text-steel"><bdi dir="ltr">{c.email}</bdi>{c.phone && <> · <bdi dir="ltr">{c.phone}</bdi></>}
+                  {" · "}{c.requested_at ? `ביקש ב-${fmtDate(c.requested_at)}` : `נכנס ב-${fmtDate(c.created_at)}`}</span>
+              </span>
+              <span className="flex gap-2">
+                <button className="btn-cut py-2" onClick={() => decide(c, "approved")}><Check className="h-4 w-4" aria-hidden />אישור</button>
+                <button className="btn-ghost py-2" onClick={() => decide(c, "rejected")}><X className="h-4 w-4" aria-hidden />דחייה</button>
+              </span>
+            </li>))}</ul>
+        </section>
+      )}
       <div className="panel overflow-x-auto">
         <table className="w-full min-w-[760px] text-right">
           <thead className="border-b border-line bg-sheet text-sm text-steel"><tr><th className="p-3">עסק</th><th className="p-3">איש קשר</th><th className="p-3">מייל</th><th className="p-3">טלפון</th><th className="p-3">תיקייה בדרייב</th><th className="p-3">הזמנות פתוחות</th><th className="p-3">סה״כ</th><th className="p-3"><span className="sr-only">פעולות</span></th></tr></thead>
           <tbody>{list.map((c) => { const s = stats(c.id); return (
             <tr key={c.id} className="border-b border-line last:border-0 hover:bg-sheet/60">
-              <td className="p-3"><Link to={`/admin/clients/${c.id}`} className="font-semibold hover:underline">{c.company_name || "—"}</Link>{c.role === "admin" && <span className="mr-2 rounded bg-slate px-1.5 text-xs text-white">מנהל</span>}</td>
+              <td className="p-3"><Link to={`/admin/clients/${c.id}`} className="font-semibold hover:underline">{c.company_name || "—"}</Link>{c.role === "admin" && <span className="mr-2 rounded bg-slate px-1.5 text-xs text-white">מנהל</span>}
+                {c.status === "rejected" && <span className="mr-2 rounded bg-red-100 px-1.5 text-xs text-red-800">נדחה</span>}</td>
               <td className="p-3">{c.full_name}</td><td className="p-3" dir="ltr">{c.email}</td><td className="p-3" dir="ltr">{c.phone}</td>
               <td className="p-3">{c.drive_folder || <span className="text-steel">—</span>}</td>
               <td className="num p-3">{s.open}</td><td className="num p-3">{s.total}</td>
@@ -361,10 +402,10 @@ export function AdminClient() {
   if (!cur) return <AppShell admin title="לקוח"><p className="text-steel">טוען…</p></AppShell>;
   const set = (p: Partial<Profile>) => setF({ ...cur, ...p });
   const save = async () => {
-    const { full_name, company_name, phone, defaults, notes, drive_folder, role, auto_folders } = cur;
+    const { full_name, company_name, phone, defaults, notes, drive_folder, role, auto_folders, status } = cur;
     try {
       if (c && cur.email.trim().toLowerCase() !== c.email.toLowerCase()) await api.setEmail(id!, cur.email);
-      await api.updateProfile(id, { full_name, company_name, phone, defaults, notes, drive_folder, role, auto_folders }); setMsg("נשמר"); setF(null); reload(); } catch (e) { setMsg((e as Error).message); }
+      await api.updateProfile(id, { full_name, company_name, phone, defaults, notes, drive_folder, role, auto_folders, ...(status ? { status } : {}) }); setMsg("נשמר"); setF(null); reload(); } catch (e) { setMsg((e as Error).message); }
   };
   const mine = orders?.filter((o) => o.user_id === id) ?? [];
   return (
@@ -380,6 +421,9 @@ export function AdminClient() {
             <div><label className="label" htmlFor="c-email">מייל (הלקוח נכנס איתו)</label><input id="c-email" type="email" className="field" dir="ltr" value={cur.email} onChange={(e) => set({ email: e.target.value })} /></div>
             <div><label className="label" htmlFor="c-role">הרשאה</label>
               <select id="c-role" className="field" value={cur.role} onChange={(e) => set({ role: e.target.value as Profile["role"] })}><option value="client">לקוח</option><option value="admin">מנהל</option></select></div>
+            <div><label className="label" htmlFor="c-status">מצב החשבון</label>
+              <select id="c-status" className="field" value={cur.status ?? "approved"} onChange={(e) => set({ status: e.target.value as Profile["status"] })}>
+                <option value="approved">מאושר</option><option value="pending">ממתין לאישור</option><option value="rejected">נדחה (אין גישה)</option></select></div>
             <div className="sm:col-span-2"><label className="label" htmlFor="c-notes">הערות פנימיות</label><textarea id="c-notes" rows={3} className="field" value={cur.notes} onChange={(e) => set({ notes: e.target.value })} /></div>
           </section>
           <label className="-mt-2 flex items-start gap-2">
